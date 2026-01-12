@@ -27,6 +27,16 @@ go.work.sum
 # env file
 .env
 
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/
+internal/database/data/
+
+# Coverage reports
+coverage.html
+
 # Editor/IDE
 # .idea/
 # .vscode/

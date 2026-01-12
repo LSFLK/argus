@@ -1,0 +1,34 @@
+# Audit Service Enum Configuration
+# This file defines the allowed values for various enum fields in audit logs
+# All enums are configurable via this YAML file for reusability across different projects
+
+enums:
+  # Event Type: User-defined custom names for event classification
+  # Examples: MANAGEMENT_EVENT, USER_MANAGEMENT, DATA_FETCH, etc.
+  eventTypes:
+    - MANAGEMENT_EVENT
+    - USER_MANAGEMENT
+    - DATA_FETCH
+
+  # Event Action: CRUD operations
+  eventActions:
+    - CREATE
+    - READ
+    - UPDATE
+    - DELETE
+
+  # Actor Type: Types of actors that can perform actions
+  # SERVICE: A microservice or system component
+  # ADMIN: An administrative user
+  # MEMBER: A regular member/user
+  # SYSTEM: Automated/system-initiated events
+  actorTypes:
+    - SERVICE
+    - ADMIN
+    - MEMBER
+    - SYSTEM
+
+  # Target Type: Types of targets that actions can be performed on
+  targetTypes:
+    - SERVICE
+    - RESOURCE
