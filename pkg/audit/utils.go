@@ -36,4 +36,3 @@ func GetGlobalAuditClient() Auditor {
 	}
 	return middleware.Client()
 }
-
