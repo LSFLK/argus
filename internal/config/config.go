@@ -84,26 +84,12 @@ func LoadEnums(configPath string) (*AuditEnums, error) {
 		return GetDefaultEnums(), nil
 	}
 
-	// Merge YAML config with defaults to ensure required event types are always available
-	// This allows enums.yaml to be customized while still including essential event types
+	// Use defaults for any missing enum arrays
+	// This matches the opendif-core audit-service approach for consistency
 	enums := &config.Enums
-
-	// Merge event types: combine YAML values with defaults, removing duplicates
 	if len(enums.EventTypes) == 0 {
 		enums.EventTypes = DefaultEnums.EventTypes
-	} else {
-		// Merge: add default event types that aren't already in YAML
-		eventTypeMap := make(map[string]bool)
-		for _, et := range enums.EventTypes {
-			eventTypeMap[et] = true
-		}
-		for _, et := range DefaultEnums.EventTypes {
-			if !eventTypeMap[et] {
-				enums.EventTypes = append(enums.EventTypes, et)
-			}
-		}
 	}
-
 	if len(enums.EventActions) == 0 {
 		enums.EventActions = DefaultEnums.EventActions
 	}
