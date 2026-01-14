@@ -1,4 +1,3 @@
-# Audit Service Enum Configuration
 # This file defines the allowed values for various enum fields in audit logs
 # All enums are configurable via this YAML file for reusability across different projects
 

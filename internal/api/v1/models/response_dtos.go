@@ -40,6 +40,7 @@ type GetAuditLogsResponse struct {
 
 // ToAuditLogResponse converts an AuditLog model to an AuditLogResponse
 // This encapsulates the mapping logic to keep handlers clean and reduce maintenance risk
+// Converts JSONBRawMessage (database type) to json.RawMessage (API type) for proper separation of concerns
 func ToAuditLogResponse(log AuditLog) AuditLogResponse {
 	return AuditLogResponse{
 		ID:                 log.ID,
@@ -52,9 +53,9 @@ func ToAuditLogResponse(log AuditLog) AuditLogResponse {
 		ActorID:            log.ActorID,
 		TargetType:         log.TargetType,
 		TargetID:           log.TargetID,
-		RequestMetadata:    log.RequestMetadata,
-		ResponseMetadata:   log.ResponseMetadata,
-		AdditionalMetadata: log.AdditionalMetadata,
+		RequestMetadata:    json.RawMessage(log.RequestMetadata),
+		ResponseMetadata:   json.RawMessage(log.ResponseMetadata),
+		AdditionalMetadata: json.RawMessage(log.AdditionalMetadata),
 		CreatedAt:          log.CreatedAt,
 	}
 }
