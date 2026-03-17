@@ -133,6 +133,7 @@ type AuditLog struct {
 
 	// Metadata (Payload without PII/sensitive data)
 	// Using JSONBRawMessage to properly handle PostgreSQL JSONB and SQLite TEXT
+	Message            JSONBRawMessage `gorm:"type:blob" json:"message,omitempty"`             // Raw message or payload (e.g. for signing)
 	RequestMetadata    JSONBRawMessage `gorm:"type:jsonb" json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
 	ResponseMetadata   JSONBRawMessage `gorm:"type:jsonb" json:"responseMetadata,omitempty"`   // Response or Error details
 	AdditionalMetadata JSONBRawMessage `gorm:"type:jsonb" json:"additionalMetadata,omitempty"` // Additional context-specific data

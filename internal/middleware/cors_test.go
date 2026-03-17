@@ -11,7 +11,7 @@ import (
 
 func TestDefaultCORSConfig(t *testing.T) {
 	t.Run("DefaultOrigins", func(t *testing.T) {
-		os.Unsetenv("CORS_ALLOWED_ORIGINS")
+		_ = os.Unsetenv("CORS_ALLOWED_ORIGINS")
 		config := DefaultCORSConfig()
 
 		assert.Contains(t, config.AllowedOrigins, "http://localhost:5173")
@@ -22,8 +22,8 @@ func TestDefaultCORSConfig(t *testing.T) {
 	})
 
 	t.Run("CustomOriginsFromEnv", func(t *testing.T) {
-		os.Setenv("CORS_ALLOWED_ORIGINS", "http://example.com,https://test.com")
-		defer os.Unsetenv("CORS_ALLOWED_ORIGINS")
+		_ = os.Setenv("CORS_ALLOWED_ORIGINS", "http://example.com,https://test.com")
+		defer func() { _ = os.Unsetenv("CORS_ALLOWED_ORIGINS") }()
 
 		config := DefaultCORSConfig()
 
@@ -32,8 +32,8 @@ func TestDefaultCORSConfig(t *testing.T) {
 	})
 
 	t.Run("WildcardOrigin", func(t *testing.T) {
-		os.Setenv("CORS_ALLOWED_ORIGINS", "*")
-		defer os.Unsetenv("CORS_ALLOWED_ORIGINS")
+		_ = os.Setenv("CORS_ALLOWED_ORIGINS", "*")
+		defer func() { _ = os.Unsetenv("CORS_ALLOWED_ORIGINS") }()
 
 		config := DefaultCORSConfig()
 

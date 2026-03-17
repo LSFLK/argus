@@ -27,6 +27,11 @@ type AuditLogResponse struct {
 	ResponseMetadata   json.RawMessage `json:"responseMetadata,omitempty"`
 	AdditionalMetadata json.RawMessage `json:"additionalMetadata,omitempty"`
 
+	Message            json.RawMessage `json:"message,omitempty"`
+	Signature          string          `json:"signature,omitempty"`
+	SignatureAlgorithm string          `json:"signature_algorithm,omitempty"`
+	PublicKeyID        string          `json:"public_key_id,omitempty"`
+
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -56,6 +61,10 @@ func ToAuditLogResponse(log AuditLog) AuditLogResponse {
 		RequestMetadata:    json.RawMessage(log.RequestMetadata),
 		ResponseMetadata:   json.RawMessage(log.ResponseMetadata),
 		AdditionalMetadata: json.RawMessage(log.AdditionalMetadata),
+		Message:            json.RawMessage(log.Message),
+		Signature:          log.Signature,
+		SignatureAlgorithm: log.SignatureAlgorithm,
+		PublicKeyID:        log.PublicKeyID,
 		CreatedAt:          log.CreatedAt,
 	}
 }

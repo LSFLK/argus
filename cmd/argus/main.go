@@ -90,7 +90,7 @@ func main() {
 			"status":  "healthy",
 		}
 
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 
 	// Version endpoint
@@ -105,7 +105,7 @@ func main() {
 			"service":   "argus",
 		}
 
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 
 	// Initialize v1 API with database-agnostic repository

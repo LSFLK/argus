@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,45 +23,92 @@ const (
 	DefaultHTTPTimeout = 10 * time.Second
 )
 
-// Client is a client for sending audit events to the audit service
-type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	enabled    bool
+// Config defines the configuration for the Audit Client
+type Config struct {
+	BaseURL            string
+	Signer             SignPayloadFunc
+	PublicKeyID        string
+	SignatureAlgorithm string        // e.g., "RS256", "EdDSA"
+	WorkerCount        int           // Number of background workers, defaults to 5
+	QueueSize          int           // Size of the internal channel, defaults to 100
+	HTTPTimeout        time.Duration // Defaults to 10s
 }
 
-// NewClient creates a new audit client
+// Client is a client for sending audit events to the audit service
+type Client struct {
+	baseURL            string
+	httpClient         *http.Client
+	enabled            bool
+	signer             SignPayloadFunc
+	publicKeyID        string
+	signatureAlgorithm string
+	queue              chan *AuditLogRequest
+	quit               chan struct{}
+	wg                 sync.WaitGroup
+}
+
+// NewClient creates a new audit client using the provided configuration.
 // Audit can be disabled by:
 //   - Setting ENABLE_AUDIT=false environment variable
-//   - Providing an empty baseURL
+//   - Providing an empty baseURL in config
 //
 // When disabled, all LogEvent calls will be no-ops.
-func NewClient(baseURL string) *Client {
-	enabled := isAuditEnabled(baseURL)
+func NewClient(cfg Config) *Client {
+	enabled := isAuditEnabled(cfg.BaseURL)
 
 	if !enabled {
 		slog.Info("Audit client disabled",
 			"reason", "ENABLE_AUDIT=false or audit service URL not configured",
 			"impact", "Services will continue running but audit events will not be logged")
 		return &Client{
-			baseURL:    "",
-			httpClient: nil,
-			enabled:    false,
+			enabled: false,
 		}
 	}
 
-	slog.Info("Audit client initialized", "baseURL", baseURL)
-	return &Client{
-		baseURL: baseURL,
+	workerCount := cfg.WorkerCount
+	if workerCount <= 0 {
+		workerCount = 5
+	}
+
+	queueSize := cfg.QueueSize
+	if queueSize <= 0 {
+		queueSize = 100
+	}
+
+	timeout := cfg.HTTPTimeout
+	if timeout <= 0 {
+		timeout = DefaultHTTPTimeout
+	}
+
+	c := &Client{
+		baseURL: cfg.BaseURL,
 		httpClient: &http.Client{
-			Timeout: DefaultHTTPTimeout,
+			Timeout: timeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 10,
 			},
 		},
-		enabled: true,
+		enabled:            true,
+		signer:             cfg.Signer,
+		publicKeyID:        cfg.PublicKeyID,
+		signatureAlgorithm: cfg.SignatureAlgorithm,
+		queue:              make(chan *AuditLogRequest, queueSize),
+		quit:               make(chan struct{}),
 	}
+
+	// Start background workers
+	for i := 0; i < workerCount; i++ {
+		c.wg.Add(1)
+		go c.worker()
+	}
+
+	slog.Info("Audit client initialized with async workers",
+		"baseURL", cfg.BaseURL,
+		"workers", workerCount,
+		"queueSize", queueSize)
+
+	return c
 }
 
 // IsEnabled returns whether the audit client is enabled
@@ -68,55 +116,123 @@ func (c *Client) IsEnabled() bool {
 	return c.enabled
 }
 
-// LogEvent sends an audit event to the audit service asynchronously (fire-and-forget)
-// This function returns immediately and logs the event in a background goroutine.
-func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) {
+// LogEvent sends an audit event to the audit service asynchronously via worker queue.
+func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) error {
 	// Skip if audit client is not enabled
-	if !c.enabled || c.httpClient == nil {
-		return
+	if !c.enabled {
+		return nil
 	}
 
-	// Log asynchronously (fire-and-forget) using background context
-	// Using background context ensures the request completes even if the original context is cancelled
-	go c.logEvent(context.Background(), event)
+	// Push to queue
+	select {
+	case c.queue <- event:
+		return nil
+	default:
+		slog.Warn("Audit queue full, dropping event", "eventType", event.EventType)
+		return fmt.Errorf("audit queue full")
+	}
 }
 
 // LogSignedEvent logs an audit event that has already been signed.
 // This is an alias for LogEvent intended for semantically clearer logging of signed events.
-func (c *Client) LogSignedEvent(ctx context.Context, event *AuditLogRequest) {
-	c.LogEvent(ctx, event)
+func (c *Client) LogSignedEvent(ctx context.Context, event *AuditLogRequest) error {
+	return c.LogEvent(ctx, event)
 }
 
 // SignEvent generates a cryptographic signature for the given request
-// using the provided private key and key identifier.
-// This method updates the event object with the signature and metadata.
-func (c *Client) SignEvent(event *AuditLogRequest, privateKey crypto.Signer, keyID string) error {
+// using the registered SignPayloadFunc.
+func (c *Client) SignEvent(ctx context.Context, event *AuditLogRequest, keyID string) error {
+	if c.signer == nil {
+		return fmt.Errorf("no signer registered with the client")
+	}
+
 	payload, err := CanonicalizeRequest(event)
 	if err != nil {
 		return fmt.Errorf("failed to canonicalize event: %w", err)
 	}
 
-	sigBase64, alg, err := SignPayload(payload, privateKey)
+	sigBase64, err := c.signer(ctx, payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign event: %w", err)
 	}
 
 	event.Signature = sigBase64
-	event.SignatureAlgorithm = alg
+	event.SignatureAlgorithm = c.signatureAlgorithm
 	event.PublicKeyID = keyID
 
 	return nil
 }
 
-// SignAndLogEvent signs the audit event using the provided private key and attributes it to keyID,
-// then logs it asynchronously.
-func (c *Client) SignAndLogEvent(ctx context.Context, event *AuditLogRequest, privateKey crypto.Signer, keyID string) error {
-	if err := c.SignEvent(event, privateKey, keyID); err != nil {
-		return err
+// Close gracefully shuts down the client, flushing the queue.
+func (c *Client) Close(ctx context.Context) error {
+	if !c.enabled {
+		return nil
+	}
+	close(c.quit)
+	close(c.queue)
+
+	// Wait for workers to finish, but honor context timeout if provided
+	done := make(chan struct{})
+	go func() {
+		c.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// VerifyIntegrity verifies the signature of a log request.
+// It uses the public key provided by the caller to verify the signature.
+func (c *Client) VerifyIntegrity(event *AuditLogRequest, publicKey crypto.PublicKey) (bool, error) {
+	if event.Signature == "" {
+		return false, fmt.Errorf("event has no signature")
 	}
 
-	c.LogSignedEvent(ctx, event)
-	return nil
+	payload, err := CanonicalizeRequest(event)
+	if err != nil {
+		return false, fmt.Errorf("failed to canonicalize event: %w", err)
+	}
+
+	err = VerifyPayload(payload, event.Signature, event.SignatureAlgorithm, publicKey)
+	if err != nil {
+		return false, fmt.Errorf("verification failed: %w", err)
+	}
+
+	return true, nil
+}
+
+func (c *Client) worker() {
+	defer c.wg.Done()
+	for {
+		select {
+		case event, ok := <-c.queue:
+			if !ok {
+				return
+			}
+
+			// Create a context with timeout for this specific event's processing
+			// Using the HTTP client's timeout as the base
+			ctx, cancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
+
+			// Automatic signing if required
+			if event.ShouldSign {
+				if err := c.SignEvent(ctx, event, c.publicKeyID); err != nil {
+					slog.Error("Failed to sign event in worker", "error", err)
+					cancel()
+					continue
+				}
+			}
+			c.logEvent(ctx, event)
+			cancel()
+		case <-c.quit:
+			return
+		}
+	}
 }
 
 // logEvent sends the audit event to the audit service API
@@ -138,7 +254,7 @@ func (c *Client) logEvent(ctx context.Context, event *AuditLogRequest) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(payloadBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		slog.Error("Failed to create audit request", "error", err)
 		return

@@ -178,11 +178,8 @@ func GetEnvOrDefault(key, defaultValue string) string {
 
 // mergeUniqueStrings merges two string slices and removes duplicates
 func mergeUniqueStrings(a, b []string) []string {
-	if len(a) == 0 {
-		return append([]string(nil), b...)
-	}
-	seen := make(map[string]struct{})
-	var result []string
+	seen := make(map[string]struct{}, len(a)+len(b))
+	result := make([]string, 0, len(a)+len(b))
 
 	for _, s := range a {
 		if _, ok := seen[s]; !ok {

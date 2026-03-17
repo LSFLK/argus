@@ -27,14 +27,16 @@ type AuditLogRequest struct {
 	TargetID   *string `json:"targetId,omitempty"` // resource_id or service_name
 
 	// Metadata (Payload without PII/sensitive data)
+	Message            []byte          `json:"message"`                      // Changed from string to bytes
 	RequestMetadata    json.RawMessage `json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
 	ResponseMetadata   json.RawMessage `json:"responseMetadata,omitempty"`   // Response or Error details
 	AdditionalMetadata json.RawMessage `json:"additionalMetadata,omitempty"` // Additional context-specific data
 
 	// Security & Non-Repudiation
+	ShouldSign         bool   `json:"-"` // Internal flag to trigger signing
 	Signature          string `json:"signature,omitempty"`
-	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
-	PublicKeyID        string `json:"publicKeyId,omitempty"`
+	SignatureAlgorithm string `json:"signature_algorithm,omitempty"`
+	PublicKeyID        string `json:"public_key_id,omitempty"`
 }
 
 // Audit log status constants

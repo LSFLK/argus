@@ -31,6 +31,7 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 		ActorID:            req.ActorID,
 		TargetType:         req.TargetType,
 		TargetID:           req.TargetID,
+		Message:            req.Message,
 		RequestMetadata:    req.RequestMetadata,
 		ResponseMetadata:   req.ResponseMetadata,
 		AdditionalMetadata: req.AdditionalMetadata,

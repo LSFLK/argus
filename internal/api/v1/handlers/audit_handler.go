@@ -34,6 +34,14 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validation for signed events
+	if req.Signature != "" || req.PublicKeyID != "" {
+		if req.Signature == "" || req.PublicKeyID == "" || req.SignatureAlgorithm == "" {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid signed event: signature, publicKeyId and signatureAlgorithm are soul-coupled", nil)
+			return
+		}
+	}
+
 	// Validation is handled by the service layer (auditLog.Validate())
 	auditLog, err := h.service.CreateAuditLog(r.Context(), &req)
 	if err != nil {

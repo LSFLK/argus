@@ -25,12 +25,13 @@ type CreateAuditLogRequest struct {
 	// Metadata (Payload without PII/sensitive data)
 	// Using JSONBRawMessage instead of json.RawMessage to avoid type conversion
 	// JSONBRawMessage implements json.Unmarshaler, so it works seamlessly with JSON decoding
+	Message            JSONBRawMessage `json:"message,omitempty"`            // Raw message or payload (e.g. for signing)
 	RequestMetadata    JSONBRawMessage `json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
 	ResponseMetadata   JSONBRawMessage `json:"responseMetadata,omitempty"`   // Response or Error details
 	AdditionalMetadata JSONBRawMessage `json:"additionalMetadata,omitempty"` // Additional context-specific data
 
 	// Security & Non-Repudiation
 	Signature          string `json:"signature,omitempty"`
-	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
-	PublicKeyID        string `json:"publicKeyId,omitempty"`
+	SignatureAlgorithm string `json:"signature_algorithm,omitempty"`
+	PublicKeyID        string `json:"public_key_id,omitempty"`
 }

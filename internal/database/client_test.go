@@ -17,25 +17,25 @@ import (
 func TestNewDatabaseConfig(t *testing.T) {
 	// Clean up environment variables after test
 	defer func() {
-		os.Unsetenv("DB_TYPE")
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("DB_PORT")
-		os.Unsetenv("DB_USERNAME")
-		os.Unsetenv("DB_PASSWORD")
-		os.Unsetenv("DB_NAME")
-		os.Unsetenv("DB_SSLMODE")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
-		os.Unsetenv("DB_CONN_MAX_LIFETIME")
-		os.Unsetenv("DB_CONN_MAX_IDLE_TIME")
+		_ = os.Unsetenv("DB_TYPE")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("DB_PORT")
+		_ = os.Unsetenv("DB_USERNAME")
+		_ = os.Unsetenv("DB_PASSWORD")
+		_ = os.Unsetenv("DB_NAME")
+		_ = os.Unsetenv("DB_SSLMODE")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_CONN_MAX_LIFETIME")
+		_ = os.Unsetenv("DB_CONN_MAX_IDLE_TIME")
 	}()
 
 	t.Run("Test 1: No Configuration - In-Memory SQLite", func(t *testing.T) {
 		// Ensure no env vars are set
-		os.Unsetenv("DB_TYPE")
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("DB_TYPE")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_HOST")
 
 		config := NewDatabaseConfig()
 
@@ -56,32 +56,32 @@ func TestNewDatabaseConfig(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 
 	t.Run("Test 2: SQLite with Custom Path", func(t *testing.T) {
 		// Clear any existing env vars first
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("DB_PORT")
-		os.Unsetenv("DB_USERNAME")
-		os.Unsetenv("DB_PASSWORD")
-		os.Unsetenv("DB_NAME")
-		os.Unsetenv("DB_SSLMODE")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("DB_PORT")
+		_ = os.Unsetenv("DB_USERNAME")
+		_ = os.Unsetenv("DB_PASSWORD")
+		_ = os.Unsetenv("DB_NAME")
+		_ = os.Unsetenv("DB_SSLMODE")
 
 		// Create a temporary directory for custom path
 		tempDir, err := os.MkdirTemp("", "audit_test_custom")
 		require.NoError(t, err, "Should create temp directory")
-		defer os.RemoveAll(tempDir)
+		defer func() { _ = os.RemoveAll(tempDir) }()
 
 		customPath := filepath.Join(tempDir, "custom_audit.db")
 
 		// Set SQLite-specific env vars
-		os.Setenv("DB_TYPE", "sqlite")
-		os.Setenv("DB_PATH", customPath)
-		os.Setenv("DB_MAX_OPEN_CONNS", "10")
-		os.Setenv("DB_MAX_IDLE_CONNS", "5")
+		_ = os.Setenv("DB_TYPE", "sqlite")
+		_ = os.Setenv("DB_PATH", customPath)
+		_ = os.Setenv("DB_MAX_OPEN_CONNS", "10")
+		_ = os.Setenv("DB_MAX_IDLE_CONNS", "5")
 
 		config := NewDatabaseConfig()
 
@@ -100,7 +100,7 @@ func TestNewDatabaseConfig(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 
 		// Verify database file was created
 		assert.FileExists(t, customPath, "Database file should be created at custom path")
@@ -108,20 +108,20 @@ func TestNewDatabaseConfig(t *testing.T) {
 
 	t.Run("Test 2a: DB_PATH Alone (No DB_TYPE) - Should Use File-Based SQLite", func(t *testing.T) {
 		// Clear all database env vars
-		os.Unsetenv("DB_TYPE")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_TYPE")
+		_ = os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Create a temporary directory for custom path
 		tempDir, err := os.MkdirTemp("", "audit_test_dbpath_only")
 		require.NoError(t, err, "Should create temp directory")
-		defer os.RemoveAll(tempDir)
+		defer func() { _ = os.RemoveAll(tempDir) }()
 
 		customPath := filepath.Join(tempDir, "dbpath_only.db")
 
 		// Set ONLY DB_PATH (no DB_TYPE)
-		os.Setenv("DB_PATH", customPath)
+		_ = os.Setenv("DB_PATH", customPath)
 
 		config := NewDatabaseConfig()
 
@@ -138,7 +138,7 @@ func TestNewDatabaseConfig(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 
 		// Verify database file was created
 		assert.FileExists(t, customPath, "Database file should be created")
@@ -146,13 +146,13 @@ func TestNewDatabaseConfig(t *testing.T) {
 
 	t.Run("Test 2b: DB_TYPE=sqlite Without DB_PATH - Should Use Default Path", func(t *testing.T) {
 		// Clear all env vars
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Set ONLY DB_TYPE=sqlite (no DB_PATH)
-		os.Setenv("DB_TYPE", "sqlite")
+		_ = os.Setenv("DB_TYPE", "sqlite")
 
 		config := NewDatabaseConfig()
 
@@ -169,17 +169,17 @@ func TestNewDatabaseConfig(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 
 	t.Run("Test 3: SQLite In-Memory", func(t *testing.T) {
 		// Clear any existing env vars first
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Set SQLite in-memory configuration
-		os.Setenv("DB_TYPE", "sqlite")
-		os.Setenv("DB_PATH", ":memory:")
+		_ = os.Setenv("DB_TYPE", "sqlite")
+		_ = os.Setenv("DB_PATH", ":memory:")
 
 		config := NewDatabaseConfig()
 
@@ -196,24 +196,24 @@ func TestNewDatabaseConfig(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping in-memory database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 
 	t.Run("Test 4: PostgreSQL Configuration", func(t *testing.T) {
 		// Clear any existing env vars first
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Set PostgreSQL-specific env vars
-		os.Setenv("DB_TYPE", "postgres")
-		os.Setenv("DB_HOST", "localhost")
-		os.Setenv("DB_PORT", "5432")
-		os.Setenv("DB_USERNAME", "testuser")
-		os.Setenv("DB_PASSWORD", "testpass")
-		os.Setenv("DB_NAME", "testdb")
-		os.Setenv("DB_SSLMODE", "disable")
-		os.Setenv("DB_MAX_OPEN_CONNS", "50")
+		_ = os.Setenv("DB_TYPE", "postgres")
+		_ = os.Setenv("DB_HOST", "localhost")
+		_ = os.Setenv("DB_PORT", "5432")
+		_ = os.Setenv("DB_USERNAME", "testuser")
+		_ = os.Setenv("DB_PASSWORD", "testpass")
+		_ = os.Setenv("DB_NAME", "testdb")
+		_ = os.Setenv("DB_SSLMODE", "disable")
+		_ = os.Setenv("DB_MAX_OPEN_CONNS", "50")
 
 		config := NewDatabaseConfig()
 
@@ -259,23 +259,23 @@ func TestNewDatabaseConfig(t *testing.T) {
 			sqlDB, err := db.DB()
 			require.NoError(t, err, "Should be able to get underlying sql.DB")
 			assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	})
 
 	t.Run("Test 5: Unknown DB_TYPE Defaults to File-Based SQLite", func(t *testing.T) {
 		// Clear any existing env vars that might affect SQLite defaults
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("DB_PORT")
-		os.Unsetenv("DB_USERNAME")
-		os.Unsetenv("DB_PASSWORD")
-		os.Unsetenv("DB_NAME")
-		os.Unsetenv("DB_SSLMODE")
-		os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_HOST")
+		_ = os.Unsetenv("DB_PORT")
+		_ = os.Unsetenv("DB_USERNAME")
+		_ = os.Unsetenv("DB_PASSWORD")
+		_ = os.Unsetenv("DB_NAME")
+		_ = os.Unsetenv("DB_SSLMODE")
+		_ = os.Unsetenv("DB_PATH")
 
-		os.Setenv("DB_TYPE", "unknown_db")
+		_ = os.Setenv("DB_TYPE", "unknown_db")
 
 		config := NewDatabaseConfig()
 
@@ -292,13 +292,13 @@ func TestNewDatabaseConfig(t *testing.T) {
 
 	t.Run("Test 5a: DB_HOST Set Without DB_TYPE=postgres - Should Use In-Memory SQLite", func(t *testing.T) {
 		// Clear all env vars
-		os.Unsetenv("DB_TYPE")
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_TYPE")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Set DB_HOST but NOT DB_TYPE=postgres
-		os.Setenv("DB_HOST", "localhost")
+		_ = os.Setenv("DB_HOST", "localhost")
 
 		// Capture log output to verify warning is logged
 		var logBuffer bytes.Buffer
@@ -321,13 +321,13 @@ func TestNewDatabaseConfig(t *testing.T) {
 
 	t.Run("Test 5b: DB_HOST Set With DB_TYPE=sqlite - Should Use File-Based SQLite", func(t *testing.T) {
 		// Clear all env vars
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Set DB_TYPE=sqlite and DB_HOST (DB_HOST should be ignored/warned)
-		os.Setenv("DB_TYPE", "sqlite")
-		os.Setenv("DB_HOST", "localhost")
+		_ = os.Setenv("DB_TYPE", "sqlite")
+		_ = os.Setenv("DB_HOST", "localhost")
 
 		// Capture log output to verify warning is logged
 		var logBuffer bytes.Buffer
@@ -349,19 +349,19 @@ func TestNewDatabaseConfig(t *testing.T) {
 
 	t.Run("Test 6: PostgreSQL with Special Characters in Password", func(t *testing.T) {
 		// Clear any existing env vars first
-		os.Unsetenv("DB_PATH")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		_ = os.Unsetenv("DB_PATH")
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
 
 		// Set PostgreSQL with special characters in password
 		specialPassword := "p@ss w#rd!123"
-		os.Setenv("DB_TYPE", "postgres")
-		os.Setenv("DB_HOST", "localhost")
-		os.Setenv("DB_PORT", "5432")
-		os.Setenv("DB_USERNAME", "testuser")
-		os.Setenv("DB_PASSWORD", specialPassword)
-		os.Setenv("DB_NAME", "testdb")
-		os.Setenv("DB_SSLMODE", "disable")
+		_ = os.Setenv("DB_TYPE", "postgres")
+		_ = os.Setenv("DB_HOST", "localhost")
+		_ = os.Setenv("DB_PORT", "5432")
+		_ = os.Setenv("DB_USERNAME", "testuser")
+		_ = os.Setenv("DB_PASSWORD", specialPassword)
+		_ = os.Setenv("DB_NAME", "testdb")
+		_ = os.Setenv("DB_SSLMODE", "disable")
 
 		config := NewDatabaseConfig()
 
@@ -405,7 +405,7 @@ func TestNewDatabaseConfig(t *testing.T) {
 			sqlDB, err := db.DB()
 			require.NoError(t, err, "Should be able to get underlying sql.DB")
 			assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	})
 }
@@ -416,7 +416,7 @@ func TestConnectGormDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	dbPath := filepath.Join(tempDir, "test.db")
 
@@ -438,7 +438,7 @@ func TestConnectGormDB(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 
 	t.Run("Connect to In-Memory SQLite", func(t *testing.T) {
@@ -459,7 +459,7 @@ func TestConnectGormDB(t *testing.T) {
 		sqlDB, err := db.DB()
 		require.NoError(t, err, "Should be able to get underlying sql.DB")
 		assert.NoError(t, sqlDB.Ping(), "Should be able to ping in-memory database")
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 
 	t.Run("Connect to PostgreSQL (graceful failure if not available)", func(t *testing.T) {
@@ -488,7 +488,7 @@ func TestConnectGormDB(t *testing.T) {
 			sqlDB, err := db.DB()
 			require.NoError(t, err, "Should be able to get underlying sql.DB")
 			assert.NoError(t, sqlDB.Ping(), "Should be able to ping database")
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	})
 }
