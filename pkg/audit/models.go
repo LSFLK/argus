@@ -30,6 +30,11 @@ type AuditLogRequest struct {
 	RequestMetadata    json.RawMessage `json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
 	ResponseMetadata   json.RawMessage `json:"responseMetadata,omitempty"`   // Response or Error details
 	AdditionalMetadata json.RawMessage `json:"additionalMetadata,omitempty"` // Additional context-specific data
+
+	// Security & Non-Repudiation
+	Signature          string `json:"signature,omitempty"`
+	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string `json:"publicKeyId,omitempty"`
 }
 
 // Audit log status constants

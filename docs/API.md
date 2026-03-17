@@ -32,12 +32,15 @@ Complete API reference for integrating Argus into your microservices architectur
 | `actorId`            | string        | Required | Actor identifier (email, UUID, service name)                 |
 | `targetType`         | string        | Required | Target type: `SERVICE` or `RESOURCE`                         |
 | `traceId`            | string (UUID) | Optional | Trace ID for distributed tracing                             |
-| `eventType`          | string        | Optional | Custom event type (e.g., `MANAGEMENT_EVENT`)                 |
+| `eventType`          | string        | Optional | Custom event type (e.g. `MANAGEMENT_EVENT`)                 |
 | `eventAction`        | string        | Optional | Action: `CREATE`, `READ`, `UPDATE`, `DELETE`                 |
 | `targetId`           | string        | Optional | Target identifier                                             |
 | `requestMetadata`    | object        | Optional | Request payload (without PII/sensitive data)                 |
 | `responseMetadata`   | object        | Optional | Response or error details                                    |
 | `additionalMetadata` | object        | Optional | Additional context-specific data                             |
+| `signature`          | string        | Optional | Base64 encoded digital signature                             |
+| `signatureAlgorithm` | string        | Optional | Signature algorithm used (e.g. `RS256`, `EdDSA`)            |
+| `publicKeyId`        | string        | Optional | Identifier for the key used to sign the event                |
 
 **Example Request:**
 
@@ -55,7 +58,10 @@ curl -X POST http://localhost:3001/api/audit-logs \
     "targetType": "SERVICE",
     "targetId": "target-service",
     "requestMetadata": {"schemaId": "schema-123"},
-    "responseMetadata": {"decision": "ALLOWED"}
+    "responseMetadata": {"decision": "ALLOWED"},
+    "signature": "base64-encoded-signature",
+    "signatureAlgorithm": "RS256",
+    "publicKeyId": "nsw-key-1"
   }'
 ```
 

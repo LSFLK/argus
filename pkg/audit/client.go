@@ -3,7 +3,9 @@ package audit
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -77,6 +79,44 @@ func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) {
 	// Log asynchronously (fire-and-forget) using background context
 	// Using background context ensures the request completes even if the original context is cancelled
 	go c.logEvent(context.Background(), event)
+}
+
+// LogSignedEvent logs an audit event that has already been signed.
+// This is an alias for LogEvent intended for semantically clearer logging of signed events.
+func (c *Client) LogSignedEvent(ctx context.Context, event *AuditLogRequest) {
+	c.LogEvent(ctx, event)
+}
+
+// SignEvent generates a cryptographic signature for the given request
+// using the provided private key and key identifier.
+// This method updates the event object with the signature and metadata.
+func (c *Client) SignEvent(event *AuditLogRequest, privateKey crypto.Signer, keyID string) error {
+	payload, err := CanonicalizeRequest(event)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize event: %w", err)
+	}
+
+	sigBase64, alg, err := SignPayload(payload, privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to sign event: %w", err)
+	}
+
+	event.Signature = sigBase64
+	event.SignatureAlgorithm = alg
+	event.PublicKeyID = keyID
+
+	return nil
+}
+
+// SignAndLogEvent signs the audit event using the provided private key and attributes it to keyID,
+// then logs it asynchronously.
+func (c *Client) SignAndLogEvent(ctx context.Context, event *AuditLogRequest, privateKey crypto.Signer, keyID string) error {
+	if err := c.SignEvent(event, privateKey, keyID); err != nil {
+		return err
+	}
+
+	c.LogSignedEvent(ctx, event)
+	return nil
 }
 
 // logEvent sends the audit event to the audit service API

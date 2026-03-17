@@ -137,6 +137,11 @@ type AuditLog struct {
 	ResponseMetadata   JSONBRawMessage `gorm:"type:jsonb" json:"responseMetadata,omitempty"`   // Response or Error details
 	AdditionalMetadata JSONBRawMessage `gorm:"type:jsonb" json:"additionalMetadata,omitempty"` // Additional context-specific data
 
+	// Security & Non-Repudiation
+	Signature          string `gorm:"type:text" json:"signature,omitempty"`
+	SignatureAlgorithm string `gorm:"type:varchar(50)" json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string `gorm:"type:varchar(255)" json:"publicKeyId,omitempty"`
+
 	// BaseModel provides CreatedAt
 	BaseModel
 }

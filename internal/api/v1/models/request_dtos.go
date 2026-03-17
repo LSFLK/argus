@@ -28,4 +28,9 @@ type CreateAuditLogRequest struct {
 	RequestMetadata    JSONBRawMessage `json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
 	ResponseMetadata   JSONBRawMessage `json:"responseMetadata,omitempty"`   // Response or Error details
 	AdditionalMetadata JSONBRawMessage `json:"additionalMetadata,omitempty"` // Additional context-specific data
+
+	// Security & Non-Repudiation
+	Signature          string `json:"signature,omitempty"`
+	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string `json:"publicKeyId,omitempty"`
 }

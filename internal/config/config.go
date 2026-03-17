@@ -84,21 +84,12 @@ func LoadEnums(configPath string) (*AuditEnums, error) {
 		return GetDefaultEnums(), nil
 	}
 
-	// Use defaults for any missing enum arrays
-	// This matches the opendif-core audit-service approach for consistency
+	// Merge YAML config with defaults to ensure all required core enums are available
 	enums := &config.Enums
-	if len(enums.EventTypes) == 0 {
-		enums.EventTypes = DefaultEnums.EventTypes
-	}
-	if len(enums.EventActions) == 0 {
-		enums.EventActions = DefaultEnums.EventActions
-	}
-	if len(enums.ActorTypes) == 0 {
-		enums.ActorTypes = DefaultEnums.ActorTypes
-	}
-	if len(enums.TargetTypes) == 0 {
-		enums.TargetTypes = DefaultEnums.TargetTypes
-	}
+	enums.EventTypes = mergeUniqueStrings(enums.EventTypes, DefaultEnums.EventTypes)
+	enums.EventActions = mergeUniqueStrings(enums.EventActions, DefaultEnums.EventActions)
+	enums.ActorTypes = mergeUniqueStrings(enums.ActorTypes, DefaultEnums.ActorTypes)
+	enums.TargetTypes = mergeUniqueStrings(enums.TargetTypes, DefaultEnums.TargetTypes)
 
 	// Initialize maps for O(1) validation lookups
 	enums.InitializeMaps()
@@ -183,4 +174,27 @@ func GetEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// mergeUniqueStrings merges two string slices and removes duplicates
+func mergeUniqueStrings(a, b []string) []string {
+	if len(a) == 0 {
+		return append([]string(nil), b...)
+	}
+	seen := make(map[string]struct{})
+	var result []string
+
+	for _, s := range a {
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			result = append(result, s)
+		}
+	}
+	for _, s := range b {
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			result = append(result, s)
+		}
+	}
+	return result
 }

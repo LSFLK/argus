@@ -1,31 +1,28 @@
 package audit
 
-import "context"
+import (
+	"context"
+	"crypto"
+)
 
-// Auditor is the primary interface for audit logging operations.
-// This interface provides a clean abstraction for audit capabilities,
-// making it easy to swap implementations and integrate audit logging into any service.
-//
-// Implementations should handle:
-// - Asynchronous logging (fire-and-forget)
-// - Graceful degradation when audit service is unavailable
-// - Thread-safe operations
+// Auditor is the primary interface for audit logging operations
 type Auditor interface {
-	// LogEvent logs an audit event asynchronously.
-	// The implementation should handle the event in a background goroutine
-	// to avoid blocking the calling code.
-	//
-	// If the audit service is disabled or unavailable, this method should
-	// return immediately without error (graceful degradation).
+	// LogEvent logs a standard audit event asynchronously
 	LogEvent(ctx context.Context, event *AuditLogRequest)
 
-	// IsEnabled returns whether audit logging is currently enabled.
-	// This can be used by callers to skip expensive audit event preparation
-	// when audit logging is disabled.
+	// SignEvent generates a digital signature for the audit request.
+	// It hashes the payload and signs it using the provided private key,
+	// populating the signature fields in the request
+	SignEvent(event *AuditLogRequest, privateKey crypto.Signer, keyID string) error
+
+	// LogSignedEvent specifically handles the transmission of events that
+	// already contain cryptographic signatures and public key metadata
+	LogSignedEvent(ctx context.Context, event *AuditLogRequest)
+
+	// IsEnabled returns whether audit logging is currently enabled
 	IsEnabled() bool
 }
 
-// AuditClient is an alias for Auditor to maintain backward compatibility.
+// AuditClient is an alias for Auditor to maintain backward compatibility
 // Deprecated: Use Auditor instead. This will be removed in a future version.
 type AuditClient = Auditor
-

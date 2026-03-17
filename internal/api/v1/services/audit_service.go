@@ -34,6 +34,9 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 		RequestMetadata:    req.RequestMetadata,
 		ResponseMetadata:   req.ResponseMetadata,
 		AdditionalMetadata: req.AdditionalMetadata,
+		Signature:          req.Signature,
+		SignatureAlgorithm: req.SignatureAlgorithm,
+		PublicKeyID:        req.PublicKeyID,
 	}
 
 	// Parse and validate timestamp (required)
