@@ -28,7 +28,7 @@ type Config struct {
 	BaseURL            string
 	Signer             SignPayloadFunc
 	PublicKeyID        string
-	SignatureAlgorithm string        // e.g., "RS256", "EdDSA"
+	SignatureAlgorithm string        // e.g. "RS256", "EdDSA"
 	WorkerCount        int           // Number of background workers, defaults to 5
 	QueueSize          int           // Size of the internal channel, defaults to 100
 	HTTPTimeout        time.Duration // Defaults to 10s
@@ -62,6 +62,19 @@ func NewClient(cfg Config) *Client {
 			"impact", "Services will continue running but audit events will not be logged")
 		return &Client{
 			enabled: false,
+		}
+	}
+
+	// Algorithm Hardening: Validate SignatureAlgorithm if a signer is provided
+	if cfg.Signer != nil {
+		switch cfg.SignatureAlgorithm {
+		case "RS256", "EdDSA":
+			// Valid
+		default:
+			slog.Error("Unsupported signature algorithm", "algorithm", cfg.SignatureAlgorithm)
+			return &Client{
+				enabled: false,
+			}
 		}
 	}
 
@@ -117,31 +130,30 @@ func (c *Client) IsEnabled() bool {
 }
 
 // LogEvent sends an audit event to the audit service asynchronously via worker queue.
-func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) error {
+func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) {
 	// Skip if audit client is not enabled
 	if !c.enabled {
-		return nil
+		return
 	}
 
 	// Push to queue
 	select {
 	case c.queue <- event:
-		return nil
+		return
 	default:
-		slog.Warn("Audit queue full, dropping event", "eventType", event.EventType)
-		return fmt.Errorf("audit queue full")
+		slog.Warn("Audit queue full, dropping event", "action", event.Action)
 	}
 }
 
 // LogSignedEvent logs an audit event that has already been signed.
 // This is an alias for LogEvent intended for semantically clearer logging of signed events.
-func (c *Client) LogSignedEvent(ctx context.Context, event *AuditLogRequest) error {
-	return c.LogEvent(ctx, event)
+func (c *Client) LogSignedEvent(ctx context.Context, event *AuditLogRequest) {
+	c.LogEvent(ctx, event)
 }
 
 // SignEvent generates a cryptographic signature for the given request
 // using the registered SignPayloadFunc.
-func (c *Client) SignEvent(ctx context.Context, event *AuditLogRequest, keyID string) error {
+func (c *Client) SignEvent(event *AuditLogRequest) error {
 	if c.signer == nil {
 		return fmt.Errorf("no signer registered with the client")
 	}
@@ -151,14 +163,16 @@ func (c *Client) SignEvent(ctx context.Context, event *AuditLogRequest, keyID st
 		return fmt.Errorf("failed to canonicalize event: %w", err)
 	}
 
-	sigBase64, err := c.signer(ctx, payload)
+	// Using context.Background() for the signing callback as the original caller's context
+	// may have expired if called from the background worker.
+	sigBase64, err := c.signer(context.Background(), payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign event: %w", err)
 	}
 
 	event.Signature = sigBase64
 	event.SignatureAlgorithm = c.signatureAlgorithm
-	event.PublicKeyID = keyID
+	event.PublicKeyID = c.publicKeyID
 
 	return nil
 }
@@ -221,8 +235,22 @@ func (c *Client) worker() {
 
 			// Automatic signing if required
 			if event.ShouldSign {
-				if err := c.SignEvent(ctx, event, c.publicKeyID); err != nil {
-					slog.Error("Failed to sign event in worker", "error", err)
+				var signErr error
+				for attempt := 1; attempt <= 3; attempt++ {
+					if signErr = c.SignEvent(event); signErr == nil {
+						break
+					}
+					slog.Warn("Failed to sign event in worker, retrying",
+						"attempt", attempt,
+						"maxAttempts", 3,
+						"error", signErr)
+
+					// Small backoff before retry (optional, but good practice)
+					time.Sleep(100 * time.Millisecond)
+				}
+
+				if signErr != nil {
+					slog.Error("Failed to sign event in worker after retries, dropping event", "error", signErr)
 					cancel()
 					continue
 				}
@@ -286,12 +314,12 @@ func (c *Client) logEvent(ctx context.Context, event *AuditLogRequest) {
 	}
 
 	slog.Info("Audit event logged successfully",
-		"eventType", event.EventType,
+		"action", event.Action,
 		"actorType", event.ActorType,
 		"actorId", event.ActorID,
 		"targetType", event.TargetType,
 		"status", event.Status,
-		"additionalMetadata", string(event.AdditionalMetadata))
+		"metadata", event.Metadata)
 }
 
 // isAuditEnabled checks if audit logging is enabled via environment variable

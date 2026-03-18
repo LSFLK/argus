@@ -64,8 +64,8 @@ func (r *GormRepository) GetAuditLogs(ctx context.Context, filters *AuditLogFilt
 	if filters.EventType != nil && *filters.EventType != "" {
 		query = query.Where("event_type = ?", *filters.EventType)
 	}
-	if filters.EventAction != nil && *filters.EventAction != "" {
-		query = query.Where("event_action = ?", *filters.EventAction)
+	if filters.Action != nil && *filters.Action != "" {
+		query = query.Where("action = ?", *filters.Action)
 	}
 	if filters.Status != nil && *filters.Status != "" {
 		query = query.Where("status = ?", *filters.Status)

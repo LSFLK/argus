@@ -21,10 +21,10 @@ type AuditRepository interface {
 
 // AuditLogFilters represents query filters for retrieving audit logs
 type AuditLogFilters struct {
-	TraceID     *string
-	EventType   *string
-	EventAction *string
-	Status      *string
-	Limit       int
-	Offset      int
+	TraceID   *string
+	EventType *string
+	Action    *string
+	Status    *string
+	Limit     int
+	Offset    int
 }

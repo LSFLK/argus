@@ -1,11 +1,6 @@
 package audit
 
-import (
-	"encoding/json"
-)
-
 // AuditLogRequest represents the request payload for creating an audit log
-// Any service can use this without importing the full audit service implementation
 type AuditLogRequest struct {
 	// Trace & Correlation
 	TraceID *string `json:"traceId,omitempty"` // UUID string, nullable for standalone events
@@ -14,29 +9,27 @@ type AuditLogRequest struct {
 	Timestamp string `json:"timestamp"` // ISO 8601 format, required
 
 	// Event Classification
-	EventType   *string `json:"eventType,omitempty"`   // MANAGEMENT_EVENT, USER_MANAGEMENT (user-defined custom names)
-	EventAction *string `json:"eventAction,omitempty"` // CREATE, READ, UPDATE, DELETE
-	Status      string  `json:"status"`                // SUCCESS, FAILURE
+	EventType string `json:"eventType,omitempty"` // MANAGEMENT_EVENT, USER_MANAGEMENT
+	Action    string `json:"action"`              // CREATE, READ, UPDATE, DELETE
+	Status    string `json:"status"`              // SUCCESS, FAILURE
 
-	// Actor Information (unified approach)
+	// Actor Information
 	ActorType string `json:"actorType"` // SERVICE, ADMIN, MEMBER, SYSTEM
-	ActorID   string `json:"actorId"`   // email, uuid, or service-name (required)
+	ActorID   string `json:"actorId"`   // email, uuid, or service-name
 
-	// Target Information (unified approach)
+	// Target Information
 	TargetType string  `json:"targetType"`         // SERVICE, RESOURCE
 	TargetID   *string `json:"targetId,omitempty"` // resource_id or service_name
 
-	// Metadata (Payload without PII/sensitive data)
-	Message            []byte          `json:"message"`                      // Changed from string to bytes
-	RequestMetadata    json.RawMessage `json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
-	ResponseMetadata   json.RawMessage `json:"responseMetadata,omitempty"`   // Response or Error details
-	AdditionalMetadata json.RawMessage `json:"additionalMetadata,omitempty"` // Additional context-specific data
+	// Payload & Metadata
+	Message  []byte                 `json:"message"`            // Specific blob for NSW/NPQS
+	Metadata map[string]interface{} `json:"metadata,omitempty"` // Consolidated metadata
 
 	// Security & Non-Repudiation
 	ShouldSign         bool   `json:"-"` // Internal flag to trigger signing
 	Signature          string `json:"signature,omitempty"`
-	SignatureAlgorithm string `json:"signature_algorithm,omitempty"`
-	PublicKeyID        string `json:"public_key_id,omitempty"`
+	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string `json:"publicKeyId,omitempty"`
 }
 
 // Audit log status constants

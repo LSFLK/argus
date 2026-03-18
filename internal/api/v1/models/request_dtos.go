@@ -10,9 +10,9 @@ type CreateAuditLogRequest struct {
 	Timestamp string `json:"timestamp" validate:"required"` // ISO 8601 format, required
 
 	// Event Classification
-	EventType   *string `json:"eventType,omitempty"`        // MANAGEMENT_EVENT, USER_MANAGEMENT (user-defined custom names)
-	EventAction *string `json:"eventAction,omitempty"`      // CREATE, READ, UPDATE, DELETE
-	Status      string  `json:"status" validate:"required"` // SUCCESS, FAILURE
+	EventType string `json:"eventType,omitempty"`        // MANAGEMENT_EVENT, USER_MANAGEMENT
+	Action    string `json:"action" validate:"required"` // CREATE, READ, UPDATE, DELETE
+	Status    string `json:"status" validate:"required"` // SUCCESS, FAILURE
 
 	// Actor Information (unified approach)
 	ActorType string `json:"actorType" validate:"required"` // SERVICE, ADMIN, MEMBER, SYSTEM
@@ -22,16 +22,12 @@ type CreateAuditLogRequest struct {
 	TargetType string  `json:"targetType" validate:"required"` // SERVICE, RESOURCE
 	TargetID   *string `json:"targetId,omitempty"`             // resource_id or service_name
 
-	// Metadata (Payload without PII/sensitive data)
-	// Using JSONBRawMessage instead of json.RawMessage to avoid type conversion
-	// JSONBRawMessage implements json.Unmarshaler, so it works seamlessly with JSON decoding
-	Message            JSONBRawMessage `json:"message,omitempty"`            // Raw message or payload (e.g. for signing)
-	RequestMetadata    JSONBRawMessage `json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
-	ResponseMetadata   JSONBRawMessage `json:"responseMetadata,omitempty"`   // Response or Error details
-	AdditionalMetadata JSONBRawMessage `json:"additionalMetadata,omitempty"` // Additional context-specific data
+	// Metadata
+	Message  []byte                 `json:"message,omitempty"`  // Raw message or payload for signing
+	Metadata map[string]interface{} `json:"metadata,omitempty"` // Consolidated metadata
 
 	// Security & Non-Repudiation
 	Signature          string `json:"signature,omitempty"`
-	SignatureAlgorithm string `json:"signature_algorithm,omitempty"`
-	PublicKeyID        string `json:"public_key_id,omitempty"`
+	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string `json:"publicKeyId,omitempty"`
 }

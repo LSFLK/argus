@@ -37,7 +37,7 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 	// Validation for signed events
 	if req.Signature != "" || req.PublicKeyID != "" {
 		if req.Signature == "" || req.PublicKeyID == "" || req.SignatureAlgorithm == "" {
-			utils.RespondWithError(w, http.StatusBadRequest, "Invalid signed event: signature, publicKeyId and signatureAlgorithm are soul-coupled", nil)
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid signed event: signature, publicKeyId, and signatureAlgorithm must all be provided if any are present", nil)
 			return
 		}
 	}
@@ -102,7 +102,7 @@ func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	logs, total, err := h.service.GetAuditLogs(r.Context(), traceIDPtr, eventTypePtr, limit, offset)
 	if err != nil {
-		// Check if it's a validation error (e.g., invalid traceId format from service layer)
+		// Check if it's a validation error (e.g. invalid traceId format from service layer)
 		if services.IsValidationError(err) {
 			utils.RespondWithError(w, http.StatusBadRequest, "Invalid query parameters", err)
 			return

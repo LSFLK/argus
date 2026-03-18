@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -22,19 +23,23 @@ func NewAuditService(repo database.AuditRepository) *AuditService {
 
 // CreateAuditLog creates a new audit log entry from a request
 func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateAuditLogRequest) (*v1models.AuditLog, error) {
+	// Marshal metadata to JSONB
+	metaBytes, err := json.Marshal(req.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to marshal metadata: %w", ErrValidation, err)
+	}
+
 	// Convert request to model
 	auditLog := &v1models.AuditLog{
 		EventType:          req.EventType,
-		EventAction:        req.EventAction,
+		Action:             req.Action,
 		Status:             req.Status,
 		ActorType:          req.ActorType,
 		ActorID:            req.ActorID,
 		TargetType:         req.TargetType,
 		TargetID:           req.TargetID,
-		Message:            req.Message,
-		RequestMetadata:    req.RequestMetadata,
-		ResponseMetadata:   req.ResponseMetadata,
-		AdditionalMetadata: req.AdditionalMetadata,
+		Message:            v1models.JSONBRawMessage(req.Message),
+		Metadata:           v1models.JSONBRawMessage(metaBytes),
 		Signature:          req.Signature,
 		SignatureAlgorithm: req.SignatureAlgorithm,
 		PublicKeyID:        req.PublicKeyID,

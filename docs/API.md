@@ -33,11 +33,10 @@ Complete API reference for integrating Argus into your microservices architectur
 | `targetType`         | string        | Required | Target type: `SERVICE` or `RESOURCE`                         |
 | `traceId`            | string (UUID) | Optional | Trace ID for distributed tracing                             |
 | `eventType`          | string        | Optional | Custom event type (e.g. `MANAGEMENT_EVENT`)                 |
-| `eventAction`        | string        | Optional | Action: `CREATE`, `READ`, `UPDATE`, `DELETE`                 |
+| `action`             | string        | Optional | Action: `CREATE`, `READ`, `UPDATE`, `DELETE`                 |
 | `targetId`           | string        | Optional | Target identifier                                             |
-| `requestMetadata`    | object        | Optional | Request payload (without PII/sensitive data)                 |
-| `responseMetadata`   | object        | Optional | Response or error details                                    |
-| `additionalMetadata` | object        | Optional | Additional context-specific data                             |
+| `metadata`           | object        | Optional | Consolidated context-specific data                           |
+| `message`            | string        | Optional | Raw message or payload for signing (Base64)                  |
 | `signature`          | string        | Optional | Base64 encoded digital signature                             |
 | `signatureAlgorithm` | string        | Optional | Signature algorithm used (e.g. `RS256`, `EdDSA`)            |
 | `publicKeyId`        | string        | Optional | Identifier for the key used to sign the event                |
@@ -51,14 +50,13 @@ curl -X POST http://localhost:3001/api/audit-logs \
     "traceId": "550e8400-e29b-41d4-a716-446655440000",
     "timestamp": "2024-01-20T10:00:00Z",
     "eventType": "MANAGEMENT_EVENT",
-    "eventAction": "READ",
+    "action": "READ",
     "status": "SUCCESS",
     "actorType": "SERVICE",
     "actorId": "my-service",
     "targetType": "SERVICE",
     "targetId": "target-service",
-    "requestMetadata": {"schemaId": "schema-123"},
-    "responseMetadata": {"decision": "ALLOWED"},
+    "metadata": {"schemaId": "schema-123", "decision": "ALLOWED"},
     "signature": "base64-encoded-signature",
     "signatureAlgorithm": "RS256",
     "publicKeyId": "nsw-key-1"
@@ -78,6 +76,8 @@ curl -X POST http://localhost:3001/api/audit-logs \
   "actorId": "my-service",
   "targetType": "SERVICE",
   "targetId": "target-service",
+  "action": "READ",
+  "metadata": {"schemaId": "schema-123", "decision": "ALLOWED"},
   "createdAt": "2024-01-20T10:00:00.123456Z"
 }
 ```
@@ -102,7 +102,7 @@ curl -X POST http://localhost:3001/api/audit-logs \
 | ------------- | ------------- | -------- | ------- | ----------------------------------------- |
 | `traceId`     | string (UUID) | Optional | -       | Filter by trace ID                        |
 | `eventType`   | string        | Optional | -       | Filter by event type                      |
-| `eventAction` | string        | Optional | -       | Filter by event action                    |
+| `action`      | string        | Optional | -       | Filter by event action                    |
 | `status`      | string        | Optional | -       | Filter by status (`SUCCESS` or `FAILURE`) |
 | `limit`       | integer       | Optional | 100     | Max results per page (1-1000)             |
 | `offset`      | integer       | Optional | 0       | Number of results to skip                 |
@@ -138,6 +138,8 @@ curl http://localhost:3001/api/audit-logs?eventType=MANAGEMENT_EVENT&status=SUCC
       "actorId": "my-service",
       "targetType": "SERVICE",
       "targetId": "target-service",
+      "action": "READ",
+      "metadata": {"schemaId": "schema-123", "decision": "ALLOWED"},
       "createdAt": "2024-01-20T10:00:00.123456Z"
     }
   ],
@@ -251,11 +253,9 @@ Always use RFC3339 format (ISO 8601):
 
 ```json
 {
-  "requestMetadata": {
+  "metadata": {
     "schemaId": "schema-123",
-    "requestedFields": ["name", "address"]
-  },
-  "responseMetadata": {
+    "requestedFields": ["name", "address"],
     "decision": "ALLOWED",
     "fieldsReturned": 2
   }
@@ -269,7 +269,7 @@ Always log failed operations:
 ```json
 {
   "status": "FAILURE",
-  "responseMetadata": {
+  "metadata": {
     "error": "operation_failed",
     "errorMessage": "Resource not found",
     "errorCode": "404"

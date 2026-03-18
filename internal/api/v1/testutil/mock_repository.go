@@ -80,14 +80,14 @@ func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.Aud
 
 		// Filter by EventType
 		if matches && filters.EventType != nil && *filters.EventType != "" {
-			if log.EventType == nil || *log.EventType != *filters.EventType {
+			if log.EventType != *filters.EventType {
 				matches = false
 			}
 		}
 
-		// Filter by EventAction
-		if matches && filters.EventAction != nil && *filters.EventAction != "" {
-			if log.EventAction == nil || *log.EventAction != *filters.EventAction {
+		// Filter by Action
+		if matches && filters.Action != nil && *filters.Action != "" {
+			if log.Action != *filters.Action {
 				matches = false
 			}
 		}

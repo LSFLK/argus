@@ -1,13 +1,16 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func TestCanonicalizeRequest(t *testing.T) {
@@ -19,7 +22,7 @@ func TestCanonicalizeRequest(t *testing.T) {
 		ActorID:            "actor-1",
 		TargetType:         "SERVICE",
 		TargetID:           func(s string) *string { return &s }("target-1"),
-		RequestMetadata:    json.RawMessage(`{"key":"value"}`),
+		Metadata:           map[string]interface{}{"key": "value"},
 		Signature:          "should-be-stripped",
 		SignatureAlgorithm: "RS256",
 		PublicKeyID:        "key-1",
@@ -38,11 +41,11 @@ func TestCanonicalizeRequest(t *testing.T) {
 	if _, ok := parsed["signature"]; ok {
 		t.Errorf("expected signature to be stripped")
 	}
-	if _, ok := parsed["signatureAlgorithm"]; ok {
-		t.Errorf("expected signatureAlgorithm to be stripped")
+	if _, ok := parsed["signature_algorithm"]; ok {
+		t.Errorf("expected signature_algorithm to be stripped")
 	}
-	if _, ok := parsed["publicKeyId"]; ok {
-		t.Errorf("expected publicKeyId to be stripped")
+	if _, ok := parsed["public_key_id"]; ok {
+		t.Errorf("expected public_key_id to be stripped")
 	}
 }
 
@@ -224,7 +227,7 @@ func TestClient_SignAndVerify(t *testing.T) {
 	}
 
 	// Sign
-	err = client.SignEvent(ctx, req, "test-key-1")
+	err = client.SignEvent(req)
 	if err != nil {
 		t.Fatalf("SignEvent failed: %v", err)
 	}
@@ -254,4 +257,121 @@ func TestClient_SignAndVerify(t *testing.T) {
 	if err == nil && ok {
 		t.Error("expected verification to fail after tampering")
 	}
+}
+func TestCanonicalizeRequest_DeepSorting(t *testing.T) {
+	// Nested JSON in Metadata should be sorted canonically
+	req1 := &AuditLogRequest{
+		Metadata: map[string]interface{}{"z": "last", "a": "first", "m": "middle"},
+	}
+	req2 := &AuditLogRequest{
+		Metadata: map[string]interface{}{"a": "first", "m": "middle", "z": "last"},
+	}
+
+	b1, err := CanonicalizeRequest(req1)
+	if err != nil {
+		t.Fatalf("unexpected error req1: %v", err)
+	}
+	b2, err := CanonicalizeRequest(req2)
+	if err != nil {
+		t.Fatalf("unexpected error req2: %v", err)
+	}
+
+	if string(b1) != string(b2) {
+		t.Errorf("expected canonicalization to sort keys in Metadata")
+	}
+
+	// Verify it contains the sorted keys
+	if !bytes.Contains(b1, []byte(`"a":"first","m":"middle","z":"last"`)) {
+		t.Errorf("expected sorted metadata in output, got %s", string(b1))
+	}
+}
+
+func TestClient_AlgorithmValidation(t *testing.T) {
+	signer := func(ctx context.Context, payload []byte) (string, error) {
+		return "sig", nil
+	}
+
+	t.Run("Valid RS256", func(t *testing.T) {
+		client := NewClient(Config{
+			BaseURL:            "http://localhost:8080",
+			Signer:             signer,
+			SignatureAlgorithm: "RS256",
+		})
+		if !client.IsEnabled() {
+			t.Error("expected client to be enabled with RS256")
+		}
+	})
+
+	t.Run("Valid EdDSA", func(t *testing.T) {
+		client := NewClient(Config{
+			BaseURL:            "http://localhost:8080",
+			Signer:             signer,
+			SignatureAlgorithm: "EdDSA",
+		})
+		if !client.IsEnabled() {
+			t.Error("expected client to be enabled with EdDSA")
+		}
+	})
+
+	t.Run("Invalid Algorithm", func(t *testing.T) {
+		client := NewClient(Config{
+			BaseURL:            "http://localhost:8080",
+			Signer:             signer,
+			SignatureAlgorithm: "MD5", // Unsupported/Insecure
+		})
+		if client.IsEnabled() {
+			t.Error("expected client to be disabled with unsupported algorithm")
+		}
+	})
+}
+
+func TestClient_SignRetry(t *testing.T) {
+	ctx := context.Background()
+	attempts := 0
+	signer := func(ctx context.Context, payload []byte) (string, error) {
+		attempts++
+		if attempts < 3 {
+			return "", fmt.Errorf("transient error")
+		}
+		return "final-sig", nil
+	}
+
+	client := NewClient(Config{
+		BaseURL:            "http://localhost:8080",
+		Signer:             signer,
+		SignatureAlgorithm: "RS256",
+		WorkerCount:        1,
+	})
+
+	req := &AuditLogRequest{
+		ActorID:    "retry-actor",
+		ShouldSign: true,
+	}
+
+	// Push to queue
+	client.LogEvent(ctx, req)
+
+	// Wait for attempts to reach 3 (3 retries within the worker)
+	// The worker loop does: try 1, fail, try 2, fail, try 3, success.
+	// So attempts should be 3.
+	success := false
+	for i := 0; i < 20; i++ {
+		if attempts >= 3 {
+			success = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if !success {
+		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+
+	// Double check that it didn't do a 4th attempt
+	time.Sleep(200 * time.Millisecond)
+	if attempts > 3 {
+		t.Errorf("expected exactly 3 attempts, got %d", attempts)
+	}
+
+	_ = client.Close(ctx)
 }

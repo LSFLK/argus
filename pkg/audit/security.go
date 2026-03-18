@@ -14,7 +14,7 @@ import (
 )
 
 // SignPayloadFunc is a strategy for signing payloads.
-// It allows the client to provide its own signing logic (e.g., KMS, File-based, etc.)
+// It allows the client to provide its own signing logic (e.g. KMS, File-based, etc.)
 // without exposing private keys to the audit library.
 type SignPayloadFunc func(ctx context.Context, payload []byte) (signature string, err error)
 
@@ -27,9 +27,8 @@ func CanonicalizeRequest(event *AuditLogRequest) ([]byte, error) {
 	eventCopy.SignatureAlgorithm = ""
 	eventCopy.PublicKeyID = ""
 
-	// json.Marshal guarantees struct fields are serialized in declaration order
-	// json.RawMessage fields retain their exact bytes, ensuring deterministic hashing.
-	// Message field ([]byte) is also included in serialization.
+	// json.Marshal guarantees struct fields are serialized in declaration order.
+	// For maps (the new Metadata field), keys are sorted alphabetically.
 	return json.Marshal(&eventCopy)
 }
 
