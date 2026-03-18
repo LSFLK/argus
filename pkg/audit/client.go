@@ -282,7 +282,7 @@ func (c *Client) logEvent(ctx context.Context, event *AuditLogRequest) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(payloadBytes))
 	if err != nil {
 		slog.Error("Failed to create audit request", "error", err)
 		return

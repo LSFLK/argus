@@ -33,7 +33,7 @@ Complete API reference for integrating Argus into your microservices architectur
 | `targetType`         | string        | Required | Target type: `SERVICE` or `RESOURCE`                         |
 | `traceId`            | string (UUID) | Optional | Trace ID for distributed tracing                             |
 | `eventType`          | string        | Optional | Custom event type (e.g. `MANAGEMENT_EVENT`)                 |
-| `action`             | string        | Optional | Action: `CREATE`, `READ`, `UPDATE`, `DELETE`                 |
+| `action`             | string        | Required | Action: `CREATE`, `READ`, `UPDATE`, `DELETE`                  |
 | `targetId`           | string        | Optional | Target identifier                                             |
 | `metadata`           | object        | Optional | Consolidated context-specific data                           |
 | `message`            | string        | Optional | Raw message or payload for signing (Base64)                  |

@@ -35,7 +35,7 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validation for signed events
-	if req.Signature != "" || req.PublicKeyID != "" {
+	if req.Signature != "" || req.PublicKeyID != "" || req.SignatureAlgorithm != "" {
 		if req.Signature == "" || req.PublicKeyID == "" || req.SignatureAlgorithm == "" {
 			utils.RespondWithError(w, http.StatusBadRequest, "Invalid signed event: signature, publicKeyId, and signatureAlgorithm must all be provided if any are present", nil)
 			return

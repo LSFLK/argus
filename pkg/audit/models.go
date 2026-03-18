@@ -10,7 +10,7 @@ type AuditLogRequest struct {
 
 	// Event Classification
 	EventType string `json:"eventType,omitempty"` // MANAGEMENT_EVENT, USER_MANAGEMENT
-	Action    string `json:"action"`              // CREATE, READ, UPDATE, DELETE
+	Action    string `json:"action"`              // CREATE, READ, UPDATE, DELETE (Required by server)
 	Status    string `json:"status"`              // SUCCESS, FAILURE
 
 	// Actor Information
