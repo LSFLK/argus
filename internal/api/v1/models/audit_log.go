@@ -120,8 +120,8 @@ type AuditLog struct {
 
 	// Event Classification
 	Status    string `gorm:"type:varchar(20);not null;index:idx_audit_logs_status" json:"status"`
-	EventType string `gorm:"type:varchar(50)" json:"eventType,omitempty"` // e.g. MANAGEMENT_EVENT, USER_MANAGEMENT
-	Action    string `gorm:"type:varchar(50)" json:"action,omitempty"`    // e.g. CREATE, READ, UPDATE, DELETE
+	EventType string `gorm:"type:varchar(50);not null;default:''" json:"eventType,omitempty"` // e.g. MANAGEMENT_EVENT, USER_MANAGEMENT
+	Action    string `gorm:"type:varchar(50);not null;default:''" json:"action,omitempty"`    // e.g. CREATE, READ, UPDATE, DELETE
 
 	// Actor Information (unified approach)
 	ActorType string `gorm:"type:varchar(50);not null" json:"actorType"`

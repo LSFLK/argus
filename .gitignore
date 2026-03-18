@@ -40,3 +40,4 @@ coverage.html
 # Editor/IDE
 # .idea/
 # .vscode/
+cmd/argus/argus

@@ -16,6 +16,9 @@ type GormRepository struct {
 
 // NewGormRepository creates a new repository (works with SQLite or PostgreSQL)
 func NewGormRepository(db *gorm.DB) *GormRepository {
+	// Run pre-migration helper to handle breaking changes safely
+	runPreMigration(db)
+
 	// Auto-migrate the audit_logs table
 	if err := db.AutoMigrate(&models.AuditLog{}); err != nil {
 		// Log migration error but don't fail service creation
@@ -23,6 +26,30 @@ func NewGormRepository(db *gorm.DB) *GormRepository {
 		slog.Warn("Failed to auto-migrate audit_logs table", "error", err)
 	}
 	return &GormRepository{db: db}
+}
+
+// runPreMigration handles breaking schema changes before GORM's AutoMigrate
+func runPreMigration(db *gorm.DB) {
+	if !db.Migrator().HasTable("audit_logs") {
+		return
+	}
+
+	// Handle column rename: event_action -> action
+	if db.Migrator().HasColumn("audit_logs", "event_action") && !db.Migrator().HasColumn("audit_logs", "action") {
+		slog.Info("Renaming column event_action to action in audit_logs table")
+		if err := db.Migrator().RenameColumn("audit_logs", "event_action", "action"); err != nil {
+			slog.Error("Failed to rename column event_action to action", "error", err)
+		}
+	}
+
+	// Handle NULLs for non-nullable conversion to avoid migration failures
+	slog.Info("Ensuring no NULL values in event_type and action columns before applying NOT NULL constraint")
+	if err := db.Exec("UPDATE audit_logs SET event_type = '' WHERE event_type IS NULL").Error; err != nil {
+		slog.Warn("Failed to update NULL event_type values", "error", err)
+	}
+	if err := db.Exec("UPDATE audit_logs SET action = '' WHERE action IS NULL").Error; err != nil {
+		slog.Warn("Failed to update NULL action values", "error", err)
+	}
 }
 
 // CreateAuditLog creates a new audit log entry
