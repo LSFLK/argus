@@ -17,7 +17,7 @@ func TestManager_Dispatch(t *testing.T) {
 	// Create a failing sink
 	failSink := &failingSink{name: "FailSink"}
 
-	manager := NewManager(sink1, sink2, failSink)
+	manager := NewManager(nil, sink1, sink2, failSink)
 
 	log := &models.AuditLog{
 		Action: "TEST_DISPATCH",

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/LSFLK/argus/internal/api/v1/database"
 	"github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/LSFLK/argus/internal/api/v1/services"
 	"github.com/LSFLK/argus/internal/api/v1/utils"
@@ -107,12 +108,16 @@ func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	offsetStr := r.URL.Query().Get("offset")
 	includeMessageStr := r.URL.Query().Get("includeMessage")
 
-	limit := 100            // default
+	// Use centralized constants for pagination
+	limit := database.DefaultLimit
 	offset := 0             // default
 	includeMessage := false // default: omit large messages in list view
 
 	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			if l > database.MaxLimit {
+				l = database.MaxLimit
+			}
 			limit = l
 		}
 	}

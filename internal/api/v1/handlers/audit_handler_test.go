@@ -21,7 +21,7 @@ func TestAuditHandler_CreateAuditLog(t *testing.T) {
 	v1testutil.SetupTestEnums()
 
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := v1services.NewAuditService(mgr, mockRepo, nil)
 	handler := NewAuditHandler(service)
 
@@ -141,7 +141,7 @@ func TestAuditHandler_CreateAuditLog(t *testing.T) {
 
 func TestAuditHandler_GetAuditLogs(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := v1services.NewAuditService(mgr, mockRepo, nil)
 	handler := NewAuditHandler(service)
 

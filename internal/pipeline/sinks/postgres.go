@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/LSFLK/argus/internal/api/v1/database"
 	"github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -17,7 +16,7 @@ import (
 
 // PostgresSink implements the Sink interface using GORM.
 // It supports PostgreSQL and SQLite (useful for local development).
-// This sink maintains a hash chain for non-repudiation.
+// This sink maintains a partitioned hash chain for non-repudiation.
 type PostgresSink struct {
 	db *gorm.DB
 }
@@ -34,7 +33,8 @@ func (s *PostgresSink) Name() string {
 	return "PostgresSink"
 }
 
-// Write persists an audit log to the database with hash chaining.
+// Write persists an audit log to the database with partitioned hash chaining.
+// Chains are partitioned by ActorID to prevent global lock contention.
 func (s *PostgresSink) Write(ctx context.Context, log *models.AuditLog) error {
 	// Integrity check
 	if (log.Signature != "" || log.PublicKeyID != "") && len(log.Message) == 0 {
@@ -43,10 +43,10 @@ func (s *PostgresSink) Write(ctx context.Context, log *models.AuditLog) error {
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var lastLog models.AuditLog
-		// Fetch the most recent log to continue the hash chain.
+		// Fetch the most recent log for THIS ACTOR to continue the partitioned hash chain.
 		// Uses SELECT ... FOR UPDATE to prevent race conditions during concurrent ingestion.
-		// Ordered by created_at DESC to ensure chronological consistency.
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("actor_id = ?", log.ActorID).
 			Order("created_at DESC, id DESC").
 			First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
 			return err
@@ -67,29 +67,39 @@ func (s *PostgresSink) Write(ctx context.Context, log *models.AuditLog) error {
 }
 
 // WriteBatch persists multiple audit logs to the database using bulk inserts.
+// Note: Batching across different actors in a single transaction is supported,
+// but each actor's chain is updated sequentially within the transaction.
 func (s *PostgresSink) WriteBatch(ctx context.Context, logs []models.AuditLog) error {
 	if len(logs) == 0 {
 		return nil
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// For batch writes, we need to handle the hash chain for each entry.
-		var lastLog models.AuditLog
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Order("created_at DESC, id DESC").
-			First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
+		// Group logs by ActorID to handle partitioned chains efficiently
+		actorLastHashes := make(map[string]string)
 
-		prevHash := lastLog.CurrentHash
 		for i := range logs {
-			logs[i].PreviousHash = prevHash
+			actorID := logs[i].ActorID
+
+			// If we haven't fetched the last hash for this actor in this transaction yet
+			if _, exists := actorLastHashes[actorID]; !exists {
+				var lastLog models.AuditLog
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("actor_id = ?", actorID).
+					Order("created_at DESC, id DESC").
+					First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
+					return err
+				}
+				actorLastHashes[actorID] = lastLog.CurrentHash
+			}
+
+			logs[i].PreviousHash = actorLastHashes[actorID]
 			currHash, err := s.computeHash(&logs[i])
 			if err != nil {
 				return fmt.Errorf("failed to compute batch hash at index %d: %w", i, err)
 			}
 			logs[i].CurrentHash = currHash
-			prevHash = logs[i].CurrentHash
+			actorLastHashes[actorID] = currHash
 		}
 
 		// Use GORM's bulk insert feature
@@ -109,19 +119,37 @@ func (s *PostgresSink) computeHash(log *models.AuditLog) (string, error) {
 	}
 
 	payload := struct {
-		ID        uuid.UUID
-		Timestamp int64
-		ActorID   string
-		Action    string
-		Status    string
-		Signature string
+		ID                 uuid.UUID
+		TraceID            *uuid.UUID
+		Timestamp          int64
+		EventType          string
+		Action             string
+		Status             string
+		ActorType          string
+		ActorID            string
+		TargetType         string
+		TargetID           *string
+		Message            models.JSONBRawMessage
+		Metadata           models.JSONBRawMessage
+		Signature          string
+		SignatureAlgorithm string
+		PublicKeyID        string
 	}{
-		ID:        log.ID,
-		Timestamp: log.Timestamp.UnixNano(),
-		ActorID:   log.ActorID,
-		Action:    log.Action,
-		Status:    log.Status,
-		Signature: log.Signature,
+		ID:                 log.ID,
+		TraceID:            log.TraceID,
+		Timestamp:          log.Timestamp.UnixNano(),
+		EventType:          log.EventType,
+		Action:             log.Action,
+		Status:             log.Status,
+		ActorType:          log.ActorType,
+		ActorID:            log.ActorID,
+		TargetType:         log.TargetType,
+		TargetID:           log.TargetID,
+		Message:            log.Message,
+		Metadata:           log.Metadata,
+		Signature:          log.Signature,
+		SignatureAlgorithm: log.SignatureAlgorithm,
+		PublicKeyID:        log.PublicKeyID,
 	}
 
 	b, err := json.Marshal(payload)
@@ -133,64 +161,4 @@ func (s *PostgresSink) computeHash(log *models.AuditLog) (string, error) {
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// --- Read Methods (for AuditService compatibility) ---
-// These methods are kept to support the query API of Argus.
-
-func (s *PostgresSink) GetAuditLogs(ctx context.Context, filters *database.AuditLogFilters) ([]models.AuditLog, int64, error) {
-	var logs []models.AuditLog
-	var total int64
-
-	if filters == nil {
-		filters = &database.AuditLogFilters{}
-	}
-
-	query := s.db.WithContext(ctx).Model(&models.AuditLog{})
-	if !filters.IncludeMessage {
-		query = query.Omit("message")
-	}
-
-	if filters.TraceID != nil && *filters.TraceID != "" {
-		query = query.Where("trace_id = ?", *filters.TraceID)
-	}
-	if filters.EventType != nil && *filters.EventType != "" {
-		query = query.Where("event_type = ?", *filters.EventType)
-	}
-	if filters.Action != nil && *filters.Action != "" {
-		query = query.Where("action = ?", *filters.Action)
-	}
-	if filters.Status != nil && *filters.Status != "" {
-		query = query.Where("status = ?", *filters.Status)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	limit := filters.Limit
-	if limit <= 0 {
-		limit = 100
-	}
-	if err := query.Order("timestamp DESC").Limit(limit).Offset(filters.Offset).Find(&logs).Error; err != nil {
-		return nil, 0, err
-	}
-
-	return logs, total, nil
-}
-
-func (s *PostgresSink) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*models.AuditLog, error) {
-	var log models.AuditLog
-	if err := s.db.WithContext(ctx).First(&log, "id = ?", id).Error; err != nil {
-		return nil, err
-	}
-	return &log, nil
-}
-
-func (s *PostgresSink) GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]models.AuditLog, error) {
-	var logs []models.AuditLog
-	if err := s.db.WithContext(ctx).Where("trace_id = ?", traceID).Order("timestamp ASC").Find(&logs).Error; err != nil {
-		return nil, err
-	}
-	return logs, nil
 }

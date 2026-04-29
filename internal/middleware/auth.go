@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"net/http"
 	"os"
@@ -37,8 +38,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Use constant-time comparison to prevent timing attacks
-		if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(authToken)) != 1 {
+		// Use constant-time comparison on hashes to prevent length-based timing attacks
+		expectedHash := sha256.Sum256([]byte(authToken))
+		actualHash := sha256.Sum256([]byte(parts[1]))
+		if subtle.ConstantTimeCompare(actualHash[:], expectedHash[:]) != 1 {
 			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
 			return
 		}

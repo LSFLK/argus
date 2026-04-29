@@ -102,10 +102,8 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 			slog.Error("Sink dispatch failed", "error", err)
 		}
 
-		// Fail-safe: If ALL sinks failed, we must inform the client.
-		// Data loss is unacceptable.
-		if len(errs) >= len(s.pipeline.Sinks()) {
-			return nil, fmt.Errorf("all storage sinks failed: %w", errs[0])
+		if len(errs) > 0 {
+			return nil, fmt.Errorf("one or more storage sinks failed: %w", errs[0])
 		}
 	}
 

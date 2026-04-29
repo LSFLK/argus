@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	v1database "github.com/LSFLK/argus/internal/api/v1/database"
 	v1handlers "github.com/LSFLK/argus/internal/api/v1/handlers"
 	v1models "github.com/LSFLK/argus/internal/api/v1/models"
 	v1services "github.com/LSFLK/argus/internal/api/v1/services"
@@ -118,17 +119,23 @@ func main() {
 	keyRegistry := v1services.NewPublicKeyRegistry()
 	// Optionally load keys from config/environment here if needed
 
-	// Initialize Sinks
+	// Initialize Sinks (Writers)
 	postgresSink := sinks.NewPostgresSink(gormDB)
 	consoleSink := sinks.NewConsoleSink()
 
+	// Initialize Readers (Query)
+	gormReader := v1database.NewGormReader(gormDB)
+
 	// Initialize Sink Manager (Router)
 	// This enables Argus to fan out logs to multiple destinations concurrently.
-	pipelineManager := pipeline.NewManager(postgresSink, consoleSink)
+	pipelineManager := pipeline.NewManager(&pipeline.Config{
+		AsyncQueueSize: 1000,
+		WorkerCount:    5,
+	}, postgresSink, consoleSink)
 
 	// Initialize v1 API
-	// The service layer now depends on the Manager for writes and PostgresSink for reads.
-	v1AuditService := v1services.NewAuditService(pipelineManager, postgresSink, keyRegistry)
+	// The service layer now depends on the Manager for writes and GormReader for reads.
+	v1AuditService := v1services.NewAuditService(pipelineManager, gormReader, keyRegistry)
 	v1AuditHandler := v1handlers.NewAuditHandler(v1AuditService)
 
 	// API endpoint for generalized audit logs (V1)

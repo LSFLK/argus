@@ -21,11 +21,11 @@
 ## Key Features
 
 - **Pluggable Pipeline Architecture** – Fan-out logs concurrently to PostgreSQL, S3, SIEMs (Splunk/ELK), or Kafka without changing core logic.
-- **Tamper-Evident Hash Chaining** – Every log entry is cryptographically linked to the previous one, creating an immutable, verifiable audit trail.
-- **Cryptographic Non-Repudiation** – Server-side verification of RSA/Ed25519 signatures for incoming logs.
-- **High-Performance Batching** – Client-side worker pool with buffered batching to minimize HTTP overhead and eliminate goroutine leaks.
+- **Tamper-Evident Partitioned Hash Chaining** – Every log entry is cryptographically linked to the previous one per `ActorID`. This ensures true immutability via a composite unique database index, while eliminating global lock contention for massive horizontal scaling.
+- **Cryptographic Non-Repudiation** – Server-side verification of RSA/Ed25519 signatures for incoming logs. The `computeHash` covers the entire payload (including all metadata and message bodies) to guarantee full payload integrity.
+- **High-Performance Batching** – Client-side worker pool with buffered batching to minimize HTTP overhead and eliminate goroutine leaks. The server utilizes GORM's `CreateInBatches` for high-throughput ingestion.
 - **Production Observability** – Built-in Prometheus metrics for ingestion rates, latencies, and security errors.
-- **Secure by Default** – Bearer token authentication and strict validation of log schemas.
+- **Secure by Default** – Fail-closed Bearer token authentication utilizing `crypto/subtle.ConstantTimeCompare` with SHA-256 pre-hashing to prevent length-based timing attacks. Strict validation of log schemas.
 
 ## Quick Start: Using the Audit Interface
 
@@ -60,12 +60,12 @@ audit.LogAuditEvent(ctx, &audit.AuditLogRequest{
 
 ---
 
-## Integration with External Applications
+## Integration with External Applications (e.g., OpenNSW)
 
-Argus is designed to be the centralized audit source of truth for other platforms. By integrating the Argus client, your application gains high-performance, tamper-evident logging with zero impact on core performance.
+Argus is designed to be the centralized audit source of truth for microservice platforms like [OpenNSW](https://github.com/OpenNSW/nsw/). By integrating the Argus client, your application gains high-performance, tamper-evident logging with zero impact on core performance.
 
 ### 1. Installation
-In your application (e.g., `nsw-api`):
+In your application (e.g., `nsw-api` or `nsw-backend`):
 ```bash
 go get github.com/LSFLK/argus/pkg/audit
 ```
@@ -75,7 +75,7 @@ Initialize the client in your main entry point. For high-scale systems, tune the
 
 ```go
 func main() {
-    // Connect to the centralized Argus service
+    // Connect to the centralized Argus service deployed via GitOps
     client := audit.NewClient("http://argus-service.nsw.svc.cluster.local:3001",
         audit.WithBatchSize(100),
         audit.WithBatchInterval(500 * time.Millisecond),
@@ -109,9 +109,9 @@ func HandleSubmission(ctx context.Context, sub *Submission) {
 ```
 
 ### 4. Benefits for National-Scale Platforms
-- **Centralized Compliance:** Single point of audit for multiple agencies and microservices.
+- **Centralized Compliance:** Single point of audit for multiple agencies and microservices (e.g., FCAU, IRD, NPQS).
 - **WORM Storage Ready:** Using the Pipeline architecture, you can route logs to S3 Object Lock or physical WORM drives for regulatory compliance.
-- **Traceability:** Propagate `trace_id` from Argus into your downstream logs for end-to-end observability.
+- **Traceability:** Propagate `trace_id` from Argus into your downstream logs for end-to-end observability across Temporal workflows and APIs.
 
 ---
 
@@ -128,11 +128,11 @@ Argus uses a **Manager/Sink** pattern. When a log is received, it is validated a
 
 ## Security & Non-Repudiation
 
-### Hash Chaining
-Argus maintains a `PreviousHash` and `CurrentHash` for every record. If any record in the database is modified or deleted, the chain breaks, making the tampering immediately detectable.
+### Partitioned Hash Chaining
+Argus maintains a `PreviousHash` and `CurrentHash` for every record. By partitioning the hash chain by `ActorID`, Argus avoids database deadlocks and global lock contention. If any record in the database is modified or deleted, the chain breaks, making the tampering immediately detectable. Forks are prevented at the database layer via a unique composite index.
 
 ### Signature Verification
-The service can be configured with a `PublicKeyRegistry`. If an incoming log includes a `publicKeyId` and `signature`, Argus will verify the authenticity of the log before persisting it to any sink.
+The service can be configured with a `PublicKeyRegistry`. If an incoming log includes a `publicKeyId` and `signature`, Argus will verify the authenticity of the log before persisting it to any sink. The cryptographic hash is computed over the fully unmarshaled struct to ensure no metadata or message attributes can be subtly altered.
 
 ## Observability
 

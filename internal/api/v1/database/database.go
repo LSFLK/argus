@@ -7,6 +7,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	// Pagination defaults
+	DefaultLimit = 100
+	MaxLimit     = 1000
+)
+
 // AuditReader defines the interface for querying audit logs.
 // This is used by the service layer to retrieve logs from a primary storage backend.
 type AuditReader interface {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LSFLK/argus/internal/api/v1/database"
 	"github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,52 +13,60 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestPostgresSink_HashChaining(t *testing.T) {
+func TestPostgresSink_PartitionedHashChaining(t *testing.T) {
 	// Setup in-memory SQLite for testing
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
 	sink := NewPostgresSink(db)
-
 	ctx := context.Background()
 
-	// 1. Write the first log
-	log1 := &models.AuditLog{
+	// 1. Actor A - First log
+	logA1 := &models.AuditLog{
 		Action:    "CREATE",
-		ActorID:   "user-1",
+		ActorID:   "actor-A",
 		Timestamp: time.Now().UTC(),
 	}
-	err = sink.Write(ctx, log1)
+	err = sink.Write(ctx, logA1)
 	require.NoError(t, err)
-	assert.Empty(t, log1.PreviousHash, "First log should have no previous hash")
-	assert.NotEmpty(t, log1.CurrentHash, "First log should have a current hash")
+	assert.Empty(t, logA1.PreviousHash, "First log for Actor A should have no previous hash")
 
-	// 2. Write a second log
-	log2 := &models.AuditLog{
+	// 2. Actor B - First log (should be independent of Actor A)
+	logB1 := &models.AuditLog{
+		Action:    "CREATE",
+		ActorID:   "actor-B",
+		Timestamp: time.Now().UTC(),
+	}
+	err = sink.Write(ctx, logB1)
+	require.NoError(t, err)
+	assert.Empty(t, logB1.PreviousHash, "First log for Actor B should have no previous hash")
+
+	// 3. Actor A - Second log (should link to A1)
+	logA2 := &models.AuditLog{
 		Action:    "UPDATE",
-		ActorID:   "user-2",
+		ActorID:   "actor-A",
 		Timestamp: time.Now().UTC(),
 	}
-	err = sink.Write(ctx, log2)
+	err = sink.Write(ctx, logA2)
 	require.NoError(t, err)
-	assert.Equal(t, log1.CurrentHash, log2.PreviousHash, "Second log should link to the first one")
-	assert.NotEmpty(t, log2.CurrentHash)
-	assert.NotEqual(t, log1.CurrentHash, log2.CurrentHash)
+	assert.Equal(t, logA1.CurrentHash, logA2.PreviousHash, "Second log for Actor A should link to its predecessor")
 
-	// 3. Write a third log
-	log3 := &models.AuditLog{
-		Action:    "DELETE",
-		ActorID:   "user-3",
+	// 4. Actor B - Second log (should link to B1)
+	logB2 := &models.AuditLog{
+		Action:    "UPDATE",
+		ActorID:   "actor-B",
 		Timestamp: time.Now().UTC(),
 	}
-	err = sink.Write(ctx, log3)
+	err = sink.Write(ctx, logB2)
 	require.NoError(t, err)
-	assert.Equal(t, log2.CurrentHash, log3.PreviousHash, "Third log should link to the second one")
+	assert.Equal(t, logB1.CurrentHash, logB2.PreviousHash, "Second log for Actor B should link to its predecessor")
+	assert.NotEqual(t, logA2.CurrentHash, logB2.CurrentHash, "Parallel chains should have different hashes")
 }
 
-func TestPostgresSink_ReadMethods(t *testing.T) {
+func TestPostgresSink_ReadSeparation(t *testing.T) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	sink := NewPostgresSink(db)
+	reader := database.NewGormReader(db)
 	ctx := context.Background()
 
 	log := &models.AuditLog{
@@ -67,14 +76,11 @@ func TestPostgresSink_ReadMethods(t *testing.T) {
 	}
 	_ = sink.Write(ctx, log)
 
-	// Test GetAuditLogByID
-	found, err := sink.GetAuditLogByID(ctx, log.ID)
+	// Test GormReader independently
+	found, err := reader.GetAuditLogByID(ctx, log.ID)
 	require.NoError(t, err)
 	assert.Equal(t, log.Action, found.Action)
 
-	// Test GetAuditLogs (list)
-	logs, total, err := sink.GetAuditLogs(ctx, nil)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), total)
-	assert.Len(t, logs, 1)
+	// Verify Sink no longer has read methods (compile-time check via interface)
+	// var _ database.AuditReader = sink // This would fail to compile now
 }

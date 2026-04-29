@@ -16,7 +16,7 @@ import (
 func TestAuditService_CreateAuditLog(t *testing.T) {
 	v1testutil.SetupTestEnums()
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := NewAuditService(mgr, mockRepo, nil)
 
 	tests := []struct {
@@ -193,7 +193,7 @@ func TestAuditService_CreateAuditLog(t *testing.T) {
 
 func TestAuditService_GetAuditLogs(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := NewAuditService(mgr, mockRepo, nil)
 
 	tests := []struct {
@@ -249,7 +249,7 @@ func TestAuditService_GetAuditLogs(t *testing.T) {
 
 func TestAuditService_GetAuditLogByID(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := NewAuditService(mgr, mockRepo, nil)
 	ctx := context.Background()
 
@@ -279,7 +279,7 @@ func TestAuditService_GetAuditLogByID(t *testing.T) {
 
 func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := NewAuditService(mgr, mockRepo, nil)
 
 	traceID := uuid.New().String()
@@ -292,7 +292,7 @@ func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {
 func TestAuditService_CreateAuditLog_InvalidTraceID(t *testing.T) {
 	v1testutil.SetupTestEnums()
 	mockRepo := v1testutil.NewMockRepository()
-	mgr := pipeline.NewManager(mockRepo)
+	mgr := pipeline.NewManager(nil, mockRepo)
 	service := NewAuditService(mgr, mockRepo, nil)
 
 	req := &v1models.CreateAuditLogRequest{

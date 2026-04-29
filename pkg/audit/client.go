@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +22,10 @@ const (
 	AuditLogsEndpoint = "/api/audit-logs"
 	// DefaultHTTPTimeout is the default timeout for HTTP requests to the audit service
 	DefaultHTTPTimeout = 10 * time.Second
+	// MaxRetries is the maximum number of retries for sending a batch
+	MaxRetries = 3
+	// InitialBackoff is the initial backoff duration for retries
+	InitialBackoff = 500 * time.Millisecond
 )
 
 // Config defines the configuration for the Audit Client
@@ -309,39 +314,58 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 	// So I should implement the bulk endpoint on the server.
 	payloadBytes, err := json.Marshal(events)
 	if err != nil {
-		slog.Error("Failed to marshal audit batch request", "error", err)
+		slog.Error("Failed to marshal audit batch", "error", err)
 		return
 	}
 
-	// Construct URL safely - use /bulk endpoint
-	endpointURL, err := url.JoinPath(c.baseURL, AuditLogsEndpoint, "bulk")
-	if err != nil {
-		slog.Error("Failed to construct audit service bulk URL", "error", err, "baseURL", c.baseURL)
+	var lastErr error
+	backoff := InitialBackoff
+
+	targetURL := c.baseURL + "/api/audit-logs/bulk"
+	for attempt := 0; attempt <= MaxRetries; attempt++ {
+		if attempt > 0 {
+			slog.Info("Retrying audit batch send", "attempt", attempt, "backoff", backoff)
+			select {
+			case <-time.After(backoff):
+				backoff *= 2 // Exponential backoff
+			case <-ctx.Done():
+				slog.Error("Context cancelled during retry wait", "error", ctx.Err())
+				return
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", targetURL, strings.NewReader(string(payloadBytes)))
+		if err != nil {
+			slog.Error("Failed to create audit request", "error", err)
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		if c.authToken != "" {
+			req.Header.Set("Authorization", "Bearer "+c.authToken)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			slog.Warn("Failed to send audit batch", "error", err, "attempt", attempt)
+			continue
+		}
+
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(bodyBytes))
+			slog.Warn("Audit service returned error for batch", "status", resp.StatusCode, "body", string(bodyBytes), "attempt", attempt)
+			continue
+		}
+
+		slog.Info("Audit batch logged successfully", "count", len(events))
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(payloadBytes))
-	if err != nil {
-		slog.Error("Failed to create audit batch request", "error", err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		slog.Error("Failed to send audit batch request", "error", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		slog.Error("Audit service returned error for batch",
-			"status", resp.StatusCode, "body", string(bodyBytes))
-		return
-	}
-
-	slog.Info("Audit batch logged successfully", "count", len(events))
+	slog.Error("Audit batch failed after maximum retries", "error", lastErr, "count", len(events))
 }
 
 // isAuditEnabled checks if audit logging is enabled via environment variable

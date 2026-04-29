@@ -128,7 +128,7 @@ type AuditLog struct {
 
 	// Actor Information (unified approach)
 	ActorType string `gorm:"type:varchar(50);not null" json:"actorType"`
-	ActorID   string `gorm:"type:varchar(255);not null" json:"actorId"` // email, uuid, or service-name
+	ActorID   string `gorm:"type:varchar(255);not null;uniqueIndex:idx_actor_prev_hash,priority:1" json:"actorId"` // email, uuid, or service-name
 
 	// Target Information (unified approach)
 	TargetType string  `gorm:"type:varchar(50);not null" json:"targetType"`
@@ -145,7 +145,7 @@ type AuditLog struct {
 	PublicKeyID        string `gorm:"type:varchar(255)" json:"publicKeyId,omitempty"`
 
 	// Hash Chaining (Non-Repudiation Phase 2)
-	PreviousHash string `gorm:"type:char(64);index:idx_audit_logs_prev_hash" json:"previousHash,omitempty"`
+	PreviousHash string `gorm:"type:char(64);uniqueIndex:idx_actor_prev_hash,priority:2" json:"previousHash,omitempty"`
 	CurrentHash  string `gorm:"type:char(64);uniqueIndex:idx_audit_logs_curr_hash" json:"currentHash,omitempty"`
 
 	// BaseModel provides CreatedAt
