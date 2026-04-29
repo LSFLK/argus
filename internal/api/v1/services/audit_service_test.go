@@ -31,20 +31,20 @@ func TestAuditService_CreateAuditLog(t *testing.T) {
 				ActorID:    "service-a",
 				TargetType: "SERVICE",
 				TargetID:   v1testutil.StringPtr("service-b"),
-				EventType:  v1testutil.StringPtr("MANAGEMENT_EVENT"),
+				EventType:  "MANAGEMENT_EVENT",
 			},
 			wantErr: false,
 		},
 		{
 			name: "Valid request with ADMIN actor",
 			req: &v1models.CreateAuditLogRequest{
-				Timestamp:   time.Now().UTC().Format(time.RFC3339),
-				Status:      v1models.StatusSuccess,
-				ActorType:   "ADMIN",
-				ActorID:     "admin@example.com",
-				TargetType:  "RESOURCE",
-				TargetID:    v1testutil.StringPtr("user-123"),
-				EventAction: v1testutil.StringPtr("CREATE"),
+				Timestamp:  time.Now().UTC().Format(time.RFC3339),
+				Status:     v1models.StatusSuccess,
+				ActorType:  "ADMIN",
+				ActorID:    "admin@example.com",
+				TargetType: "RESOURCE",
+				TargetID:   v1testutil.StringPtr("user-123"),
+				Action:     "CREATE",
 			},
 			wantErr: false,
 		},
@@ -94,7 +94,7 @@ func TestAuditService_CreateAuditLog(t *testing.T) {
 				ActorID:    "service-1",
 				TargetType: "SERVICE",
 				TargetID:   v1testutil.StringPtr("service-2"),
-				EventType:  v1testutil.StringPtr("INVALID_EVENT"),
+				EventType:  "INVALID_EVENT",
 			},
 			wantErr: true,
 		},
@@ -136,13 +136,13 @@ func TestAuditService_CreateAuditLog(t *testing.T) {
 		{
 			name: "Invalid event action",
 			req: &v1models.CreateAuditLogRequest{
-				Timestamp:   time.Now().UTC().Format(time.RFC3339),
-				Status:      v1models.StatusSuccess,
-				ActorType:   "SERVICE",
-				ActorID:     "service-1",
-				TargetType:  "SERVICE",
-				TargetID:    v1testutil.StringPtr("service-1"),
-				EventAction: v1testutil.StringPtr("INVALID_ACTION"),
+				Timestamp:  time.Now().UTC().Format(time.RFC3339),
+				Status:     v1models.StatusSuccess,
+				ActorType:  "SERVICE",
+				ActorID:    "service-1",
+				TargetType: "SERVICE",
+				TargetID:   v1testutil.StringPtr("service-1"),
+				Action:     "INVALID_ACTION",
 			},
 			wantErr: true,
 		},
@@ -232,7 +232,7 @@ func TestAuditService_GetAuditLogs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs, total, err := service.GetAuditLogs(context.Background(), tt.traceID, tt.eventType, tt.limit, tt.offset)
+			logs, total, err := service.GetAuditLogs(context.Background(), tt.traceID, tt.eventType, tt.limit, tt.offset, false)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -242,6 +242,35 @@ func TestAuditService_GetAuditLogs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuditService_GetAuditLogByID(t *testing.T) {
+	mockRepo := v1testutil.NewMockRepository()
+	service := NewAuditService(mockRepo)
+	ctx := context.Background()
+
+	// Create a test log
+	log := &v1models.AuditLog{
+		ID:         uuid.New(),
+		Timestamp:  time.Now(),
+		Status:     v1models.StatusSuccess,
+		ActorType:  "SERVICE",
+		ActorID:    "test-service",
+		TargetType: "SERVICE",
+	}
+	_, _ = mockRepo.CreateAuditLog(ctx, log)
+
+	t.Run("RecordFound", func(t *testing.T) {
+		result, err := service.GetAuditLogByID(ctx, log.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, log.ID, result.ID)
+	})
+
+	t.Run("RecordNotFound", func(t *testing.T) {
+		_, err := service.GetAuditLogByID(ctx, uuid.New())
+		assert.Error(t, err)
+		assert.True(t, IsNotFoundError(err))
+	})
 }
 
 func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {

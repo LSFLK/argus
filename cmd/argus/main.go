@@ -90,7 +90,9 @@ func main() {
 			"status":  "healthy",
 		}
 
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			slog.Error("Failed to encode health response", "error", err)
+		}
 	})
 
 	// Version endpoint
@@ -105,7 +107,9 @@ func main() {
 			"service":   "argus",
 		}
 
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			slog.Error("Failed to encode version response", "error", err)
+		}
 	})
 
 	// Initialize v1 API with database-agnostic repository

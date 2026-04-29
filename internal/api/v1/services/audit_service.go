@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/LSFLK/argus/internal/api/v1/database"
@@ -22,18 +24,26 @@ func NewAuditService(repo database.AuditRepository) *AuditService {
 
 // CreateAuditLog creates a new audit log entry from a request
 func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateAuditLogRequest) (*v1models.AuditLog, error) {
+	// Marshal metadata to JSONB
+	metaBytes, err := json.Marshal(req.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to marshal metadata: %w", ErrValidation, err)
+	}
+
 	// Convert request to model
 	auditLog := &v1models.AuditLog{
 		EventType:          req.EventType,
-		EventAction:        req.EventAction,
+		Action:             req.Action,
 		Status:             req.Status,
 		ActorType:          req.ActorType,
 		ActorID:            req.ActorID,
 		TargetType:         req.TargetType,
 		TargetID:           req.TargetID,
-		RequestMetadata:    req.RequestMetadata,
-		ResponseMetadata:   req.ResponseMetadata,
-		AdditionalMetadata: req.AdditionalMetadata,
+		Message:            v1models.JSONBRawMessage(req.Message),
+		Metadata:           v1models.JSONBRawMessage(metaBytes),
+		Signature:          req.Signature,
+		SignatureAlgorithm: req.SignatureAlgorithm,
+		PublicKeyID:        req.PublicKeyID,
 	}
 
 	// Parse and validate timestamp (required)
@@ -70,15 +80,29 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 }
 
 // GetAuditLogs retrieves audit logs with optional filtering
-func (s *AuditService) GetAuditLogs(ctx context.Context, traceID *string, eventType *string, limit, offset int) ([]v1models.AuditLog, int64, error) {
+func (s *AuditService) GetAuditLogs(ctx context.Context, traceID *string, eventType *string, limit, offset int, includeMessage bool) ([]v1models.AuditLog, int64, error) {
 	filters := &database.AuditLogFilters{
-		TraceID:   traceID,
-		EventType: eventType,
-		Limit:     limit,
-		Offset:    offset,
+		TraceID:        traceID,
+		EventType:      eventType,
+		Limit:          limit,
+		Offset:         offset,
+		IncludeMessage: includeMessage,
 	}
 
 	return s.repo.GetAuditLogs(ctx, filters)
+}
+
+// GetAuditLogByID retrieves a single audit log entry by its ID
+func (s *AuditService) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*v1models.AuditLog, error) {
+	log, err := s.repo.GetAuditLogByID(ctx, id)
+	if err != nil {
+		// Map repository errors to domain errors
+		if strings.Contains(err.Error(), "not found") {
+			return nil, fmt.Errorf("%w: %w", ErrNotFound, err)
+		}
+		return nil, err
+	}
+	return log, nil
 }
 
 // GetAuditLogsByTraceID retrieves audit logs by trace ID (convenience method)

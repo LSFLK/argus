@@ -34,6 +34,14 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validation for signed events
+	if req.Signature != "" || req.PublicKeyID != "" || req.SignatureAlgorithm != "" {
+		if req.Signature == "" || req.PublicKeyID == "" || req.SignatureAlgorithm == "" {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid signed event: signature, publicKeyId, and signatureAlgorithm must all be provided if any are present", nil)
+			return
+		}
+	}
+
 	// Validation is handled by the service layer (auditLog.Validate())
 	auditLog, err := h.service.CreateAuditLog(r.Context(), &req)
 	if err != nil {
@@ -61,9 +69,11 @@ func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	eventType := r.URL.Query().Get("eventType")
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	includeMessageStr := r.URL.Query().Get("includeMessage")
 
-	limit := 100 // default
-	offset := 0  // default
+	limit := 100            // default
+	offset := 0             // default
+	includeMessage := false // default: omit large messages in list view
 
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
@@ -74,6 +84,9 @@ func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
 			offset = o
 		}
+	}
+	if includeMessageStr == "true" {
+		includeMessage = true
 	}
 
 	// Validate traceId format if provided
@@ -92,9 +105,9 @@ func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 		eventTypePtr = &eventType
 	}
 
-	logs, total, err := h.service.GetAuditLogs(r.Context(), traceIDPtr, eventTypePtr, limit, offset)
+	logs, total, err := h.service.GetAuditLogs(r.Context(), traceIDPtr, eventTypePtr, limit, offset, includeMessage)
 	if err != nil {
-		// Check if it's a validation error (e.g., invalid traceId format from service layer)
+		// Check if it's a validation error (e.g. invalid traceId format from service layer)
 		if services.IsValidationError(err) {
 			utils.RespondWithError(w, http.StatusBadRequest, "Invalid query parameters", err)
 			return
@@ -115,4 +128,40 @@ func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.RespondWithJSON(w, http.StatusOK, response)
+}
+
+// GetAuditLogByID handles GET /api/audit-logs/:id
+func (h *AuditHandler) GetAuditLogByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// In a real router like chi/gorilla, the ID would be in the URL params.
+	// Since we are using a basic handler, we might expect it in the query or path.
+	// The current main.go doesn't show a sophisticated router, so we'll look for "id" query param for now,
+	// or assume the caller handles routing to this method with the ID available.
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "Missing audit log ID", nil)
+		return
+	}
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid audit log ID format", err)
+		return
+	}
+
+	log, err := h.service.GetAuditLogByID(r.Context(), id)
+	if err != nil {
+		if services.IsNotFoundError(err) {
+			utils.RespondWithError(w, http.StatusNotFound, "Audit log not found", err)
+			return
+		}
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to retrieve audit log", err)
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusOK, models.ToAuditLogResponse(*log))
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/LSFLK/argus/internal/api/v1/models"
+	"github.com/google/uuid"
 )
 
 // AuditRepository defines the database-agnostic interface for audit log operations
@@ -17,14 +18,18 @@ type AuditRepository interface {
 
 	// GetAuditLogs retrieves audit logs with optional filtering
 	GetAuditLogs(ctx context.Context, filters *AuditLogFilters) ([]models.AuditLog, int64, error)
+
+	// GetAuditLogByID retrieves a single audit log entry by its ID
+	GetAuditLogByID(ctx context.Context, id uuid.UUID) (*models.AuditLog, error)
 }
 
 // AuditLogFilters represents query filters for retrieving audit logs
 type AuditLogFilters struct {
-	TraceID     *string
-	EventType   *string
-	EventAction *string
-	Status      *string
-	Limit       int
-	Offset      int
+	TraceID        *string
+	EventType      *string
+	Action         *string
+	Status         *string
+	Limit          int
+	Offset         int
+	IncludeMessage bool
 }

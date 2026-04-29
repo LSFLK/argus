@@ -13,9 +13,9 @@ type AuditLogResponse struct {
 	Timestamp time.Time  `json:"timestamp"`
 	TraceID   *uuid.UUID `json:"traceId,omitempty"`
 
-	EventType   *string `json:"eventType,omitempty"`
-	EventAction *string `json:"eventAction,omitempty"`
-	Status      string  `json:"status"`
+	EventType string `json:"eventType,omitempty"`
+	Action    string `json:"action,omitempty"`
+	Status    string `json:"status"`
 
 	ActorType string `json:"actorType"`
 	ActorID   string `json:"actorId"`
@@ -23,9 +23,12 @@ type AuditLogResponse struct {
 	TargetType string  `json:"targetType"`
 	TargetID   *string `json:"targetId,omitempty"`
 
-	RequestMetadata    json.RawMessage `json:"requestMetadata,omitempty"`
-	ResponseMetadata   json.RawMessage `json:"responseMetadata,omitempty"`
-	AdditionalMetadata json.RawMessage `json:"additionalMetadata,omitempty"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
+
+	Message            json.RawMessage `json:"message,omitempty"`
+	Signature          string          `json:"signature,omitempty"`
+	SignatureAlgorithm string          `json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string          `json:"publicKeyId,omitempty"`
 
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -39,23 +42,23 @@ type GetAuditLogsResponse struct {
 }
 
 // ToAuditLogResponse converts an AuditLog model to an AuditLogResponse
-// This encapsulates the mapping logic to keep handlers clean and reduce maintenance risk
-// Converts JSONBRawMessage (database type) to json.RawMessage (API type) for proper separation of concerns
 func ToAuditLogResponse(log AuditLog) AuditLogResponse {
 	return AuditLogResponse{
 		ID:                 log.ID,
 		Timestamp:          log.Timestamp,
 		TraceID:            log.TraceID,
 		EventType:          log.EventType,
-		EventAction:        log.EventAction,
+		Action:             log.Action,
 		Status:             log.Status,
 		ActorType:          log.ActorType,
 		ActorID:            log.ActorID,
 		TargetType:         log.TargetType,
 		TargetID:           log.TargetID,
-		RequestMetadata:    json.RawMessage(log.RequestMetadata),
-		ResponseMetadata:   json.RawMessage(log.ResponseMetadata),
-		AdditionalMetadata: json.RawMessage(log.AdditionalMetadata),
+		Metadata:           json.RawMessage(log.Metadata),
+		Message:            json.RawMessage(log.Message),
+		Signature:          log.Signature,
+		SignatureAlgorithm: log.SignatureAlgorithm,
+		PublicKeyID:        log.PublicKeyID,
 		CreatedAt:          log.CreatedAt,
 	}
 }

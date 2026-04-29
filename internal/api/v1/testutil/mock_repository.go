@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/LSFLK/argus/internal/api/v1/database"
@@ -80,14 +81,14 @@ func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.Aud
 
 		// Filter by EventType
 		if matches && filters.EventType != nil && *filters.EventType != "" {
-			if log.EventType == nil || *log.EventType != *filters.EventType {
+			if log.EventType != *filters.EventType {
 				matches = false
 			}
 		}
 
-		// Filter by EventAction
-		if matches && filters.EventAction != nil && *filters.EventAction != "" {
-			if log.EventAction == nil || *log.EventAction != *filters.EventAction {
+		// Filter by Action
+		if matches && filters.Action != nil && *filters.Action != "" {
+			if log.Action != *filters.Action {
 				matches = false
 			}
 		}
@@ -141,7 +142,25 @@ func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.Aud
 	}
 
 	paginatedLogs := filteredLogs[start:end]
+
+	// Performance optimization: Omit large message blobs by default
+	if !filters.IncludeMessage {
+		for i := range paginatedLogs {
+			paginatedLogs[i].Message = nil
+		}
+	}
+
 	return paginatedLogs, total, nil
+}
+
+// GetAuditLogByID retrieves a single audit log entry by its ID
+func (m *MockRepository) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*v1models.AuditLog, error) {
+	for _, log := range m.logs {
+		if log.ID == id {
+			return log, nil
+		}
+	}
+	return nil, fmt.Errorf("audit log not found with ID %s", id)
 }
 
 // GetLogs returns all logs stored in the mock (useful for test assertions)

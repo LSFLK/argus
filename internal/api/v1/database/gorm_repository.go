@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/LSFLK/argus/internal/api/v1/models"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -27,6 +28,11 @@ func NewGormRepository(db *gorm.DB) *GormRepository {
 
 // CreateAuditLog creates a new audit log entry
 func (r *GormRepository) CreateAuditLog(ctx context.Context, log *models.AuditLog) (*models.AuditLog, error) {
+	// Integrity check: If signature or publicKeyId is present, the message must not be empty
+	if (log.Signature != "" || log.PublicKeyID != "") && len(log.Message) == 0 {
+		return nil, fmt.Errorf("invalid audit log: signature present but message is empty")
+	}
+
 	result := r.db.WithContext(ctx).Create(log)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to create audit log: %w", result.Error)
@@ -57,6 +63,11 @@ func (r *GormRepository) GetAuditLogs(ctx context.Context, filters *AuditLogFilt
 
 	query := r.db.WithContext(ctx).Model(&models.AuditLog{})
 
+	// Performance optimization: Omit large message blobs by default
+	if !filters.IncludeMessage {
+		query = query.Omit("message")
+	}
+
 	// Apply filters
 	if filters.TraceID != nil && *filters.TraceID != "" {
 		query = query.Where("trace_id = ?", *filters.TraceID)
@@ -64,8 +75,8 @@ func (r *GormRepository) GetAuditLogs(ctx context.Context, filters *AuditLogFilt
 	if filters.EventType != nil && *filters.EventType != "" {
 		query = query.Where("event_type = ?", *filters.EventType)
 	}
-	if filters.EventAction != nil && *filters.EventAction != "" {
-		query = query.Where("event_action = ?", *filters.EventAction)
+	if filters.Action != nil && *filters.Action != "" {
+		query = query.Where("action = ?", *filters.Action)
 	}
 	if filters.Status != nil && *filters.Status != "" {
 		query = query.Where("status = ?", *filters.Status)
@@ -96,4 +107,17 @@ func (r *GormRepository) GetAuditLogs(ctx context.Context, filters *AuditLogFilt
 	}
 
 	return logs, total, nil
+}
+
+// GetAuditLogByID retrieves a single audit log entry by its ID
+func (r *GormRepository) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*models.AuditLog, error) {
+	var log models.AuditLog
+	result := r.db.WithContext(ctx).First(&log, "id = ?", id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("audit log not found with ID %s", id)
+		}
+		return nil, fmt.Errorf("failed to get audit log: %w", result.Error)
+	}
+	return &log, nil
 }

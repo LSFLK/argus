@@ -119,9 +119,9 @@ type AuditLog struct {
 	TraceID *uuid.UUID `gorm:"index:idx_audit_logs_trace_id" json:"traceId,omitempty"`
 
 	// Event Classification
-	Status      string  `gorm:"type:varchar(20);not null;index:idx_audit_logs_status" json:"status"`
-	EventType   *string `gorm:"type:varchar(50)" json:"eventType,omitempty"`   // e.g., MANAGEMENT_EVENT, USER_MANAGEMENT (user-defined custom names)
-	EventAction *string `gorm:"type:varchar(50)" json:"eventAction,omitempty"` // e.g., CREATE, READ, UPDATE, DELETE
+	Status    string `gorm:"type:varchar(20);not null;index:idx_audit_logs_status" json:"status"`
+	EventType string `gorm:"type:varchar(50)" json:"eventType,omitempty"` // e.g. MANAGEMENT_EVENT, USER_MANAGEMENT
+	Action    string `gorm:"type:varchar(50)" json:"action,omitempty"`    // e.g. CREATE, READ, UPDATE, DELETE
 
 	// Actor Information (unified approach)
 	ActorType string `gorm:"type:varchar(50);not null" json:"actorType"`
@@ -133,9 +133,13 @@ type AuditLog struct {
 
 	// Metadata (Payload without PII/sensitive data)
 	// Using JSONBRawMessage to properly handle PostgreSQL JSONB and SQLite TEXT
-	RequestMetadata    JSONBRawMessage `gorm:"type:jsonb" json:"requestMetadata,omitempty"`    // Request payload without PII/sensitive data
-	ResponseMetadata   JSONBRawMessage `gorm:"type:jsonb" json:"responseMetadata,omitempty"`   // Response or Error details
-	AdditionalMetadata JSONBRawMessage `gorm:"type:jsonb" json:"additionalMetadata,omitempty"` // Additional context-specific data
+	Message  JSONBRawMessage `gorm:"type:blob" json:"message,omitempty"`   // Raw message or payload (e.g. for signing)
+	Metadata JSONBRawMessage `gorm:"type:jsonb" json:"metadata,omitempty"` // Consolidated metadata
+
+	// Security & Non-Repudiation
+	Signature          string `gorm:"type:text" json:"signature,omitempty"`
+	SignatureAlgorithm string `gorm:"type:varchar(50)" json:"signatureAlgorithm,omitempty"`
+	PublicKeyID        string `gorm:"type:varchar(255)" json:"publicKeyId,omitempty"`
 
 	// BaseModel provides CreatedAt
 	BaseModel
@@ -204,33 +208,25 @@ func (l *AuditLog) Validate() error {
 		}
 	}
 
-	// Validate event_type if provided (nullable field, using config's O(1) validation method)
-	if l.EventType != nil && *l.EventType != "" {
+	// Validate event_type if provided
+	if l.EventType != "" {
 		if enumConfig != nil {
-			if !enumConfig.IsValidEventType(*l.EventType) {
-				return fmt.Errorf("invalid eventType: %s", *l.EventType)
+			if !enumConfig.IsValidEventType(l.EventType) {
+				return fmt.Errorf("invalid eventType: %s", l.EventType)
 			}
-		} else {
-			// Fallback to default event types when config is not loaded
-			// Use config.DefaultEnums to avoid duplication (access fields directly to avoid copying sync.Once)
-			if !contains(config.DefaultEnums.EventTypes, *l.EventType) {
-				return fmt.Errorf("invalid eventType: %s", *l.EventType)
-			}
+		} else if !contains(config.DefaultEnums.EventTypes, l.EventType) {
+			return fmt.Errorf("invalid eventType: %s", l.EventType)
 		}
 	}
 
-	// Validate event_action if provided (nullable field, using config's O(1) validation method)
-	if l.EventAction != nil && *l.EventAction != "" {
+	// Validate action if provided
+	if l.Action != "" {
 		if enumConfig != nil {
-			if !enumConfig.IsValidEventAction(*l.EventAction) {
-				return fmt.Errorf("invalid eventAction: %s", *l.EventAction)
+			if !enumConfig.IsValidEventAction(l.Action) {
+				return fmt.Errorf("invalid action: %s", l.Action)
 			}
-		} else {
-			// Fallback to default actions when config is not loaded
-			// Use config.DefaultEnums to avoid duplication (access fields directly to avoid copying sync.Once)
-			if !contains(config.DefaultEnums.EventActions, *l.EventAction) {
-				return fmt.Errorf("invalid eventAction: %s", *l.EventAction)
-			}
+		} else if !contains(config.DefaultEnums.EventActions, l.Action) {
+			return fmt.Errorf("invalid action: %s", l.Action)
 		}
 	}
 
