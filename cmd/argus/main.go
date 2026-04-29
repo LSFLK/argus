@@ -11,13 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	v1database "github.com/LSFLK/argus/internal/api/v1/database"
 	v1handlers "github.com/LSFLK/argus/internal/api/v1/handlers"
 	v1models "github.com/LSFLK/argus/internal/api/v1/models"
 	v1services "github.com/LSFLK/argus/internal/api/v1/services"
 	"github.com/LSFLK/argus/internal/config"
 	"github.com/LSFLK/argus/internal/database"
 	"github.com/LSFLK/argus/internal/middleware"
+	"github.com/LSFLK/argus/internal/pipeline"
+	"github.com/LSFLK/argus/internal/pipeline/sinks"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -117,9 +118,17 @@ func main() {
 	keyRegistry := v1services.NewPublicKeyRegistry()
 	// Optionally load keys from config/environment here if needed
 
-	// Initialize v1 API with database-agnostic repository
-	v1Repository := v1database.NewGormRepository(gormDB)
-	v1AuditService := v1services.NewAuditService(v1Repository, keyRegistry)
+	// Initialize Sinks
+	postgresSink := sinks.NewPostgresSink(gormDB)
+	consoleSink := sinks.NewConsoleSink()
+
+	// Initialize Sink Manager (Router)
+	// This enables Argus to fan out logs to multiple destinations concurrently.
+	pipelineManager := pipeline.NewManager(postgresSink, consoleSink)
+
+	// Initialize v1 API
+	// The service layer now depends on the Manager for writes and PostgresSink for reads.
+	v1AuditService := v1services.NewAuditService(pipelineManager, postgresSink, keyRegistry)
 	v1AuditHandler := v1handlers.NewAuditHandler(v1AuditService)
 
 	// API endpoint for generalized audit logs (V1)
@@ -194,6 +203,13 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		slog.Error("Server forced to shutdown", "error", err)
 		os.Exit(1)
+	}
+
+	// Close the pipeline manager to flush any pending logs in sinks
+	if errs := pipelineManager.Close(); len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("Failed to close sink during shutdown", "error", err)
+		}
 	}
 
 	slog.Info("Argus exited")

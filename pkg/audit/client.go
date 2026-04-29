@@ -344,12 +344,6 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 	slog.Info("Audit batch logged successfully", "count", len(events))
 }
 
-// logEvent sends a single audit event to the audit service API
-// Deprecated: Use logBatch for production. Kept for single event logging if needed.
-func (c *Client) logEvent(ctx context.Context, event *AuditLogRequest) {
-	c.logBatch(ctx, []*AuditLogRequest{event})
-}
-
 // isAuditEnabled checks if audit logging is enabled via environment variable
 // Audit is enabled by default unless explicitly disabled via ENABLE_AUDIT=false
 // or if baseURL is empty

@@ -7,15 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// AuditRepository defines the database-agnostic interface for audit log operations
-// This allows the service to work with any database implementation (PostgreSQL, MongoDB, etc.)
-type AuditRepository interface {
-	// CreateAuditLog creates a new audit log entry
-	CreateAuditLog(ctx context.Context, log *models.AuditLog) (*models.AuditLog, error)
-
-	// CreateAuditLogBatch creates multiple audit log entries in a single operation
-	CreateAuditLogBatch(ctx context.Context, logs []models.AuditLog) ([]models.AuditLog, error)
-
+// AuditReader defines the interface for querying audit logs.
+// This is used by the service layer to retrieve logs from a primary storage backend.
+type AuditReader interface {
 	// GetAuditLogsByTraceID retrieves all audit logs for a given trace ID
 	GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]models.AuditLog, error)
 

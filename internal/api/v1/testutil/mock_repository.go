@@ -10,46 +10,63 @@ import (
 	"github.com/google/uuid"
 )
 
-// MockRepository is a simple mock implementation of database.AuditRepository for testing
+// MockRepository implements both sinks.Sink and database.AuditReader for testing.
 type MockRepository struct {
 	logs []*v1models.AuditLog
 }
 
-// NewMockRepository creates a new MockRepository instance
+// NewMockRepository creates a new MockRepository instance.
 func NewMockRepository() *MockRepository {
 	return &MockRepository{
 		logs: make([]*v1models.AuditLog, 0),
 	}
 }
 
-// CreateAuditLog simulates creating an audit log
-// It automatically generates an ID if not provided (simulating BeforeCreate hook behavior)
-func (m *MockRepository) CreateAuditLog(ctx context.Context, log *v1models.AuditLog) (*v1models.AuditLog, error) {
+func (m *MockRepository) Name() string {
+	return "MockRepository"
+}
+
+// Write simulates persisting an audit log (implements sinks.Sink).
+func (m *MockRepository) Write(ctx context.Context, log *v1models.AuditLog) error {
 	if log.ID == uuid.Nil {
 		log.ID = uuid.New()
 	}
 	m.logs = append(m.logs, log)
-	return log, nil
+	return nil
 }
 
-// CreateAuditLogBatch simulates creating multiple audit logs
+// CreateAuditLog is a convenience method for testing (compatibility with old tests).
+func (m *MockRepository) CreateAuditLog(ctx context.Context, log *v1models.AuditLog) (*v1models.AuditLog, error) {
+	err := m.Write(ctx, log)
+	return log, err
+}
+
+// CreateAuditLogBatch is a convenience method for testing (compatibility with old tests).
 func (m *MockRepository) CreateAuditLogBatch(ctx context.Context, logs []v1models.AuditLog) ([]v1models.AuditLog, error) {
 	for i := range logs {
-		if logs[i].ID == uuid.Nil {
-			logs[i].ID = uuid.New()
-		}
-		m.logs = append(m.logs, &logs[i])
+		_ = m.Write(ctx, &logs[i])
 	}
 	return logs, nil
 }
 
-// GetAuditLogsByTraceID retrieves all audit logs for a given trace ID
-// Results are ordered by timestamp ASC (chronological order)
+// WriteBatch simulates persisting multiple audit logs (implements sinks.Sink).
+func (m *MockRepository) WriteBatch(ctx context.Context, logs []v1models.AuditLog) error {
+	for i := range logs {
+		_ = m.Write(ctx, &logs[i])
+	}
+	return nil
+}
+
+// Close is a no-op for the MockRepository.
+func (m *MockRepository) Close() error {
+	return nil
+}
+
+// GetAuditLogsByTraceID retrieves all audit logs for a given trace ID (implements database.AuditReader).
 func (m *MockRepository) GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]v1models.AuditLog, error) {
-	// Parse traceID string to UUID for comparison
 	traceUUID, err := uuid.Parse(traceID)
 	if err != nil {
-		return []v1models.AuditLog{}, nil // Return empty slice for invalid UUID
+		return []v1models.AuditLog{}, nil
 	}
 
 	filteredLogs := []v1models.AuditLog{}
@@ -59,7 +76,6 @@ func (m *MockRepository) GetAuditLogsByTraceID(ctx context.Context, traceID stri
 		}
 	}
 
-	// Sort by timestamp ASC (chronological order)
 	sort.Slice(filteredLogs, func(i, j int) bool {
 		return filteredLogs[i].Timestamp.Before(filteredLogs[j].Timestamp)
 	})
@@ -67,44 +83,34 @@ func (m *MockRepository) GetAuditLogsByTraceID(ctx context.Context, traceID stri
 	return filteredLogs, nil
 }
 
-// GetAuditLogs retrieves audit logs with optional filtering
-// Results are ordered by timestamp DESC (newest first) and paginated
+// GetAuditLogs retrieves audit logs with optional filtering (implements database.AuditReader).
 func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.AuditLogFilters) ([]v1models.AuditLog, int64, error) {
 	if filters == nil {
 		filters = &database.AuditLogFilters{}
 	}
 
-	// Filter logs based on provided criteria
 	filteredLogs := []v1models.AuditLog{}
 	for _, log := range m.logs {
 		matches := true
-
-		// Filter by TraceID
 		if filters.TraceID != nil && *filters.TraceID != "" {
 			traceUUID, err := uuid.Parse(*filters.TraceID)
 			if err != nil {
-				continue // Skip if traceID is invalid
+				continue
 			}
 			if log.TraceID == nil || *log.TraceID != traceUUID {
 				matches = false
 			}
 		}
-
-		// Filter by EventType
 		if matches && filters.EventType != nil && *filters.EventType != "" {
 			if log.EventType != *filters.EventType {
 				matches = false
 			}
 		}
-
-		// Filter by Action
 		if matches && filters.Action != nil && *filters.Action != "" {
 			if log.Action != *filters.Action {
 				matches = false
 			}
 		}
-
-		// Filter by Status
 		if matches && filters.Status != nil && *filters.Status != "" {
 			if log.Status != *filters.Status {
 				matches = false
@@ -116,29 +122,20 @@ func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.Aud
 		}
 	}
 
-	// Get total count before pagination
 	total := int64(len(filteredLogs))
-
-	// Sort by timestamp DESC (newest first)
 	sort.Slice(filteredLogs, func(i, j int) bool {
 		return filteredLogs[i].Timestamp.After(filteredLogs[j].Timestamp)
 	})
 
-	// Apply pagination
 	limit := filters.Limit
 	if limit <= 0 {
-		limit = 100 // default
+		limit = 100
 	}
-	if limit > 1000 {
-		limit = 1000 // max
-	}
-
 	offset := filters.Offset
 	if offset < 0 {
 		offset = 0
 	}
 
-	// Apply offset and limit
 	start := offset
 	end := offset + limit
 	if start > len(filteredLogs) {
@@ -153,8 +150,6 @@ func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.Aud
 	}
 
 	paginatedLogs := filteredLogs[start:end]
-
-	// Performance optimization: Omit large message blobs by default
 	if !filters.IncludeMessage {
 		for i := range paginatedLogs {
 			paginatedLogs[i].Message = nil
@@ -164,7 +159,7 @@ func (m *MockRepository) GetAuditLogs(ctx context.Context, filters *database.Aud
 	return paginatedLogs, total, nil
 }
 
-// GetAuditLogByID retrieves a single audit log entry by its ID
+// GetAuditLogByID retrieves a single audit log entry by its ID (implements database.AuditReader).
 func (m *MockRepository) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*v1models.AuditLog, error) {
 	for _, log := range m.logs {
 		if log.ID == id {
@@ -174,12 +169,12 @@ func (m *MockRepository) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*v1
 	return nil, fmt.Errorf("audit log not found with ID %s", id)
 }
 
-// GetLogs returns all logs stored in the mock (useful for test assertions)
+// GetLogs returns all logs stored in the mock.
 func (m *MockRepository) GetLogs() []*v1models.AuditLog {
 	return m.logs
 }
 
-// ClearLogs clears all stored logs (useful for test cleanup)
+// ClearLogs clears all stored logs.
 func (m *MockRepository) ClearLogs() {
 	m.logs = make([]*v1models.AuditLog, 0)
 }

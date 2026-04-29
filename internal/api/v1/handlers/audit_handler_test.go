@@ -11,6 +11,7 @@ import (
 	v1models "github.com/LSFLK/argus/internal/api/v1/models"
 	v1services "github.com/LSFLK/argus/internal/api/v1/services"
 	v1testutil "github.com/LSFLK/argus/internal/api/v1/testutil"
+	"github.com/LSFLK/argus/internal/pipeline"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,8 @@ func TestAuditHandler_CreateAuditLog(t *testing.T) {
 	v1testutil.SetupTestEnums()
 
 	mockRepo := v1testutil.NewMockRepository()
-	service := v1services.NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := v1services.NewAuditService(mgr, mockRepo, nil)
 	handler := NewAuditHandler(service)
 
 	tests := []struct {
@@ -139,7 +141,8 @@ func TestAuditHandler_CreateAuditLog(t *testing.T) {
 
 func TestAuditHandler_GetAuditLogs(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := v1services.NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := v1services.NewAuditService(mgr, mockRepo, nil)
 	handler := NewAuditHandler(service)
 
 	tests := []struct {

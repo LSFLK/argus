@@ -7,6 +7,7 @@ import (
 
 	v1models "github.com/LSFLK/argus/internal/api/v1/models"
 	v1testutil "github.com/LSFLK/argus/internal/api/v1/testutil"
+	"github.com/LSFLK/argus/internal/pipeline"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,8 @@ import (
 func TestAuditService_CreateAuditLog(t *testing.T) {
 	v1testutil.SetupTestEnums()
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := NewAuditService(mgr, mockRepo, nil)
 
 	tests := []struct {
 		name    string
@@ -191,7 +193,8 @@ func TestAuditService_CreateAuditLog(t *testing.T) {
 
 func TestAuditService_GetAuditLogs(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := NewAuditService(mgr, mockRepo, nil)
 
 	tests := []struct {
 		name      string
@@ -246,7 +249,8 @@ func TestAuditService_GetAuditLogs(t *testing.T) {
 
 func TestAuditService_GetAuditLogByID(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := NewAuditService(mgr, mockRepo, nil)
 	ctx := context.Background()
 
 	// Create a test log
@@ -275,7 +279,8 @@ func TestAuditService_GetAuditLogByID(t *testing.T) {
 
 func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := NewAuditService(mgr, mockRepo, nil)
 
 	traceID := uuid.New().String()
 
@@ -287,7 +292,8 @@ func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {
 func TestAuditService_CreateAuditLog_InvalidTraceID(t *testing.T) {
 	v1testutil.SetupTestEnums()
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo, nil)
+	mgr := pipeline.NewManager(mockRepo)
+	service := NewAuditService(mgr, mockRepo, nil)
 
 	req := &v1models.CreateAuditLogRequest{
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),

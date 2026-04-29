@@ -15,7 +15,7 @@ func MetricsMiddleware(next http.Handler) http.Handler {
 
 		// Wrap response writer to capture status code
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		next.ServeHTTP(rw, r)
 
 		duration := time.Since(start).Seconds()

@@ -4,27 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/LSFLK/argus/internal/api/v1/database"
 	v1models "github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/LSFLK/argus/internal/metrics"
+	"github.com/LSFLK/argus/internal/pipeline"
 	"github.com/LSFLK/argus/pkg/audit"
 	"github.com/google/uuid"
 )
 
-// AuditService handles generalized audit log operations
+// AuditService handles generalized audit log operations.
+// It uses a Sink Manager to fan out logs to multiple destinations.
 type AuditService struct {
-	repo database.AuditRepository
-	keys *PublicKeyRegistry
+	pipeline *pipeline.Manager
+	reader   database.AuditReader
+	keys     *PublicKeyRegistry
 }
 
-// NewAuditService creates a new audit service instance
-func NewAuditService(repo database.AuditRepository, keys *PublicKeyRegistry) *AuditService {
+// NewAuditService creates a new audit service instance.
+func NewAuditService(mgr *pipeline.Manager, reader database.AuditReader, keys *PublicKeyRegistry) *AuditService {
 	return &AuditService{
-		repo: repo,
-		keys: keys,
+		pipeline: mgr,
+		reader:   reader,
+		keys:     keys,
 	}
 }
 
@@ -84,14 +89,28 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 		return nil, fmt.Errorf("%w: %w", ErrValidation, err)
 	}
 
-	// Create in database using repository
-	createdLog, err := s.repo.CreateAuditLog(ctx, auditLog)
-	if err != nil {
-		return nil, err
+	// Set default values before dispatching to sinks
+	if auditLog.ID == uuid.Nil {
+		auditLog.ID = uuid.New()
+	}
+	auditLog.CreatedAt = time.Now().UTC()
+
+	// Dispatch to all registered sinks (fan-out)
+	errs := s.pipeline.Dispatch(ctx, auditLog)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("Sink dispatch failed", "error", err)
+		}
+
+		// Fail-safe: If ALL sinks failed, we must inform the client.
+		// Data loss is unacceptable.
+		if len(errs) >= len(s.pipeline.Sinks()) {
+			return nil, fmt.Errorf("all storage sinks failed: %w", errs[0])
+		}
 	}
 
 	metrics.LogsIngestedTotal.Inc()
-	return createdLog, nil
+	return auditLog, nil
 }
 
 // CreateAuditLogBatch creates a batch of audit logs
@@ -151,14 +170,31 @@ func (s *AuditService) CreateAuditLogBatch(ctx context.Context, batchReq v1model
 		logs = append(logs, auditLog)
 	}
 
-	// Create in database using repository
-	createdLogs, err := s.repo.CreateAuditLogBatch(ctx, logs)
-	if err != nil {
-		return nil, err
+	// Populate IDs and Timestamps for the whole batch
+	for i := range logs {
+		if logs[i].ID == uuid.Nil {
+			logs[i].ID = uuid.New()
+		}
+		logs[i].CreatedAt = time.Now().UTC()
 	}
 
-	metrics.LogsIngestedTotal.Add(float64(len(createdLogs)))
-	return createdLogs, nil
+	// Dispatch batch to all registered sinks (fan-out)
+	// This is much more efficient than individual dispatch as it allows
+	// sinks (like Postgres) to use bulk insert operations.
+	errs := s.pipeline.DispatchBatch(ctx, logs)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("Sink batch dispatch failed", "error", err)
+		}
+
+		// If all sinks failed, return error to client
+		if len(errs) >= len(s.pipeline.Sinks()) {
+			return nil, fmt.Errorf("all storage sinks failed for batch: %w", errs[0])
+		}
+	}
+
+	metrics.LogsIngestedTotal.Add(float64(len(logs)))
+	return logs, nil
 }
 
 // GetAuditLogs retrieves audit logs with optional filtering
@@ -171,12 +207,12 @@ func (s *AuditService) GetAuditLogs(ctx context.Context, traceID *string, eventT
 		IncludeMessage: includeMessage,
 	}
 
-	return s.repo.GetAuditLogs(ctx, filters)
+	return s.reader.GetAuditLogs(ctx, filters)
 }
 
 // GetAuditLogByID retrieves a single audit log entry by its ID
 func (s *AuditService) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*v1models.AuditLog, error) {
-	log, err := s.repo.GetAuditLogByID(ctx, id)
+	log, err := s.reader.GetAuditLogByID(ctx, id)
 	if err != nil {
 		// Map repository errors to domain errors
 		if strings.Contains(err.Error(), "not found") {
@@ -189,7 +225,7 @@ func (s *AuditService) GetAuditLogByID(ctx context.Context, id uuid.UUID) (*v1mo
 
 // GetAuditLogsByTraceID retrieves audit logs by trace ID (convenience method)
 func (s *AuditService) GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]v1models.AuditLog, error) {
-	return s.repo.GetAuditLogsByTraceID(ctx, traceID)
+	return s.reader.GetAuditLogsByTraceID(ctx, traceID)
 }
 
 func (s *AuditService) verifyRequestSignature(req *v1models.CreateAuditLogRequest) error {

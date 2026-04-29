@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"os"
 	"strings"
@@ -8,18 +9,19 @@ import (
 
 // AuthMiddleware validates the Authorization header for a Bearer token
 func AuthMiddleware(next http.Handler) http.Handler {
-	// For production, this would ideally be loaded from a secret manager or OIDC provider.
-	// For this refactor, we'll check for an ARGUS_AUTH_TOKEN environment variable.
+	// For production, we require a token. Fail-closed if missing.
 	authToken := os.Getenv("ARGUS_AUTH_TOKEN")
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip auth for health and version endpoints if needed, 
-		// but here we apply it to the mux it's wrapped around.
-		
-		// If no token is configured, we might want to warn or allow (depending on policy).
-		// For hardening, we should require it if configured.
-		if authToken == "" {
+		// Skip auth for public endpoints (health, metrics, version)
+		if r.URL.Path == "/health" || r.URL.Path == "/metrics" || r.URL.Path == "/version" {
 			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Fail closed if no token is configured in the environment
+		if authToken == "" {
+			http.Error(w, "Unauthorized: Server authentication is not configured", http.StatusUnauthorized)
 			return
 		}
 
@@ -35,7 +37,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if parts[1] != authToken {
+		// Use constant-time comparison to prevent timing attacks
+		if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(authToken)) != 1 {
 			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
 			return
 		}
