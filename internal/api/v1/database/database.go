@@ -13,6 +13,9 @@ type AuditRepository interface {
 	// CreateAuditLog creates a new audit log entry
 	CreateAuditLog(ctx context.Context, log *models.AuditLog) (*models.AuditLog, error)
 
+	// CreateAuditLogBatch creates multiple audit log entries in a single operation
+	CreateAuditLogBatch(ctx context.Context, logs []models.AuditLog) ([]models.AuditLog, error)
+
 	// GetAuditLogsByTraceID retrieves all audit logs for a given trace ID
 	GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]models.AuditLog, error)
 

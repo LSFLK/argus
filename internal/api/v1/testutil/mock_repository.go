@@ -32,6 +32,17 @@ func (m *MockRepository) CreateAuditLog(ctx context.Context, log *v1models.Audit
 	return log, nil
 }
 
+// CreateAuditLogBatch simulates creating multiple audit logs
+func (m *MockRepository) CreateAuditLogBatch(ctx context.Context, logs []v1models.AuditLog) ([]v1models.AuditLog, error) {
+	for i := range logs {
+		if logs[i].ID == uuid.Nil {
+			logs[i].ID = uuid.New()
+		}
+		m.logs = append(m.logs, &logs[i])
+	}
+	return logs, nil
+}
+
 // GetAuditLogsByTraceID retrieves all audit logs for a given trace ID
 // Results are ordered by timestamp ASC (chronological order)
 func (m *MockRepository) GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]v1models.AuditLog, error) {

@@ -83,6 +83,9 @@ const (
 	StatusFailure = "FAILURE"
 	// Note: Partial failures should be logged as FAILURE with details in response_metadata or additional_metadata
 	// Example: {"succeeded": 95, "failed": 5, "total": 100}
+
+	// RFC3339Micro is the format for timestamps with microsecond precision
+	RFC3339Micro = "2006-01-02T15:04:05.000000Z07:00"
 )
 
 // Enum configuration (loaded from YAML config file)
@@ -140,6 +143,10 @@ type AuditLog struct {
 	Signature          string `gorm:"type:text" json:"signature,omitempty"`
 	SignatureAlgorithm string `gorm:"type:varchar(50)" json:"signatureAlgorithm,omitempty"`
 	PublicKeyID        string `gorm:"type:varchar(255)" json:"publicKeyId,omitempty"`
+
+	// Hash Chaining (Non-Repudiation Phase 2)
+	PreviousHash string `gorm:"type:char(64);index:idx_audit_logs_prev_hash" json:"previousHash,omitempty"`
+	CurrentHash  string `gorm:"type:char(64);uniqueIndex:idx_audit_logs_curr_hash" json:"currentHash,omitempty"`
 
 	// BaseModel provides CreatedAt
 	BaseModel

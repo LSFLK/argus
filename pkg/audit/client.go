@@ -31,6 +31,8 @@ type Config struct {
 	SignatureAlgorithm string        // e.g. "RS256", "EdDSA"
 	WorkerCount        int           // Number of background workers, defaults to 5
 	QueueSize          int           // Size of the internal channel, defaults to 100
+	BatchSize          int           // Number of logs to send in one batch, defaults to 20
+	BatchInterval      time.Duration // Max time to wait before sending a batch, defaults to 1s
 	HTTPTimeout        time.Duration // Defaults to 10s
 }
 
@@ -45,6 +47,8 @@ type Client struct {
 	queue              chan *AuditLogRequest
 	quit               chan struct{}
 	wg                 sync.WaitGroup
+	batchSize          int
+	batchInterval      time.Duration
 }
 
 // NewClient creates a new audit client using the provided configuration.
@@ -88,6 +92,16 @@ func NewClient(cfg Config) *Client {
 		queueSize = 100
 	}
 
+	batchSize := cfg.BatchSize
+	if batchSize <= 0 {
+		batchSize = 20
+	}
+
+	batchInterval := cfg.BatchInterval
+	if batchInterval <= 0 {
+		batchInterval = 1 * time.Second
+	}
+
 	timeout := cfg.HTTPTimeout
 	if timeout <= 0 {
 		timeout = DefaultHTTPTimeout
@@ -108,6 +122,8 @@ func NewClient(cfg Config) *Client {
 		signatureAlgorithm: cfg.SignatureAlgorithm,
 		queue:              make(chan *AuditLogRequest, queueSize),
 		quit:               make(chan struct{}),
+		batchSize:          batchSize,
+		batchInterval:      batchInterval,
 	}
 
 	// Start background workers
@@ -116,9 +132,11 @@ func NewClient(cfg Config) *Client {
 		go c.worker()
 	}
 
-	slog.Info("Audit client initialized with async workers",
+	slog.Info("Audit client initialized with async workers and batching",
 		"baseURL", cfg.BaseURL,
 		"workers", workerCount,
+		"batchSize", batchSize,
+		"batchInterval", batchInterval,
 		"queueSize", queueSize)
 
 	return c
@@ -222,16 +240,30 @@ func (c *Client) VerifyIntegrity(event *AuditLogRequest, publicKey crypto.Public
 
 func (c *Client) worker() {
 	defer c.wg.Done()
+
+	buffer := make([]*AuditLogRequest, 0, c.batchSize)
+	ticker := time.NewTicker(c.batchInterval)
+	defer ticker.Stop()
+
+	flush := func() {
+		if len(buffer) == 0 {
+			return
+		}
+		// Create a context with timeout for the batch
+		ctx, cancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
+		defer cancel()
+
+		c.logBatch(ctx, buffer)
+		buffer = make([]*AuditLogRequest, 0, c.batchSize)
+	}
+
 	for {
 		select {
 		case event, ok := <-c.queue:
 			if !ok {
+				flush()
 				return
 			}
-
-			// Create a context with timeout for this specific event's processing
-			// Using the HTTP client's timeout as the base
-			ctx, cancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
 
 			// Automatic signing if required
 			if event.ShouldSign {
@@ -244,82 +276,78 @@ func (c *Client) worker() {
 						"attempt", attempt,
 						"maxAttempts", 3,
 						"error", signErr)
-
-					// Small backoff before retry (optional, but good practice)
 					time.Sleep(100 * time.Millisecond)
 				}
 
 				if signErr != nil {
 					slog.Error("Failed to sign event in worker after retries, dropping event", "error", signErr)
-					cancel()
 					continue
 				}
 			}
-			c.logEvent(ctx, event)
-			cancel()
+
+			buffer = append(buffer, event)
+			if len(buffer) >= c.batchSize {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
 		case <-c.quit:
+			flush()
 			return
 		}
 	}
 }
 
-// logEvent sends the audit event to the audit service API
-func (c *Client) logEvent(ctx context.Context, event *AuditLogRequest) {
-	if c.httpClient == nil {
+// logBatch sends a batch of audit events to the audit service API
+func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
+	if c.httpClient == nil || len(events) == 0 {
 		return
 	}
 
-	payloadBytes, err := json.Marshal(event)
+	// For now, we'll use a new bulk endpoint if it exists, or just loop if not.
+	// But the requirement says "send to the server in bulk rather than via individual HTTP requests".
+	// So I should implement the bulk endpoint on the server.
+	payloadBytes, err := json.Marshal(events)
 	if err != nil {
-		slog.Error("Failed to marshal audit request", "error", err)
+		slog.Error("Failed to marshal audit batch request", "error", err)
 		return
 	}
 
-	// Construct URL safely
-	endpointURL, err := url.JoinPath(c.baseURL, AuditLogsEndpoint)
+	// Construct URL safely - use /bulk endpoint
+	endpointURL, err := url.JoinPath(c.baseURL, AuditLogsEndpoint, "bulk")
 	if err != nil {
-		slog.Error("Failed to construct audit service URL", "error", err, "baseURL", c.baseURL)
+		slog.Error("Failed to construct audit service bulk URL", "error", err, "baseURL", c.baseURL)
 		return
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(payloadBytes))
 	if err != nil {
-		slog.Error("Failed to create audit request", "error", err)
+		slog.Error("Failed to create audit batch request", "error", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		slog.Error("Failed to send audit request", "error", err)
+		slog.Error("Failed to send audit batch request", "error", err)
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			slog.Error("Failed to close audit response body", "error", err)
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			slog.Error("Audit service returned non-201 status and failed to read body",
-				"status", resp.StatusCode, "readError", readErr)
-		} else {
-			slog.Error("Audit service returned non-201 status",
-				"status", resp.StatusCode, "body", string(bodyBytes))
-		}
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		slog.Error("Audit service returned error for batch",
+			"status", resp.StatusCode, "body", string(bodyBytes))
 		return
 	}
 
-	slog.Info("Audit event logged successfully",
-		"action", event.Action,
-		"actorType", event.ActorType,
-		"actorId", event.ActorID,
-		"targetType", event.TargetType,
-		"status", event.Status,
-		"metadata", event.Metadata)
+	slog.Info("Audit batch logged successfully", "count", len(events))
+}
+
+// logEvent sends a single audit event to the audit service API
+// Deprecated: Use logBatch for production. Kept for single event logging if needed.
+func (c *Client) logEvent(ctx context.Context, event *AuditLogRequest) {
+	c.logBatch(ctx, []*AuditLogRequest{event})
 }
 
 // isAuditEnabled checks if audit logging is enabled via environment variable

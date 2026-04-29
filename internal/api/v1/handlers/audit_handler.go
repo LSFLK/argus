@@ -57,6 +57,42 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusCreated, auditLog)
 }
 
+// CreateAuditLogBatch handles POST /api/audit-logs/bulk
+func (h *AuditHandler) CreateAuditLogBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req models.CreateAuditLogBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Basic validation for signatures in batch
+	for _, logReq := range req {
+		if logReq.Signature != "" || logReq.PublicKeyID != "" || logReq.SignatureAlgorithm != "" {
+			if logReq.Signature == "" || logReq.PublicKeyID == "" || logReq.SignatureAlgorithm == "" {
+				utils.RespondWithError(w, http.StatusBadRequest, "Invalid signed event in batch: signature, publicKeyId, and signatureAlgorithm must all be provided", nil)
+				return
+			}
+		}
+	}
+
+	logs, err := h.service.CreateAuditLogBatch(r.Context(), req)
+	if err != nil {
+		if services.IsValidationError(err) {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid request payload in batch", err)
+			return
+		}
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create audit log batch", err)
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusCreated, logs)
+}
+
 // GetAuditLogs handles GET /api/audit-logs
 func (h *AuditHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

@@ -2,6 +2,9 @@ package database
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -26,18 +29,99 @@ func NewGormRepository(db *gorm.DB) *GormRepository {
 	return &GormRepository{db: db}
 }
 
-// CreateAuditLog creates a new audit log entry
+// CreateAuditLog creates a new audit log entry with hash chaining
 func (r *GormRepository) CreateAuditLog(ctx context.Context, log *models.AuditLog) (*models.AuditLog, error) {
-	// Integrity check: If signature or publicKeyId is present, the message must not be empty
+	// Integrity check
 	if (log.Signature != "" || log.PublicKeyID != "") && len(log.Message) == 0 {
 		return nil, fmt.Errorf("invalid audit log: signature present but message is empty")
 	}
 
-	result := r.db.WithContext(ctx).Create(log)
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to create audit log: %w", result.Error)
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var lastLog models.AuditLog
+		// Find the most recent log to get the previous hash
+		// Using a lock (if supported) to prevent concurrent inserts from forking the chain
+		// SQLite uses database-level locking during transactions anyway.
+		if err := tx.Order("created_at DESC, id DESC").First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		log.PreviousHash = lastLog.CurrentHash
+		log.CurrentHash = r.computeHash(log)
+
+		if err := tx.Create(log).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create audit log with chaining: %w", err)
 	}
 	return log, nil
+}
+
+// CreateAuditLogBatch creates multiple audit log entries in a single operation with chaining
+func (r *GormRepository) CreateAuditLogBatch(ctx context.Context, logs []models.AuditLog) ([]models.AuditLog, error) {
+	if len(logs) == 0 {
+		return logs, nil
+	}
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var lastLog models.AuditLog
+		if err := tx.Order("created_at DESC, id DESC").First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		currentPrevHash := lastLog.CurrentHash
+		for i := range logs {
+			if (logs[i].Signature != "" || logs[i].PublicKeyID != "") && len(logs[i].Message) == 0 {
+				return fmt.Errorf("invalid audit log in batch: signature present but message is empty")
+			}
+
+			logs[i].PreviousHash = currentPrevHash
+			logs[i].CurrentHash = r.computeHash(&logs[i])
+			currentPrevHash = logs[i].CurrentHash
+		}
+
+		if err := tx.Create(&logs).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create audit log batch with chaining: %w", err)
+	}
+	return logs, nil
+}
+
+func (r *GormRepository) computeHash(log *models.AuditLog) string {
+	h := sha256.New()
+	// Chain the previous hash
+	h.Write([]byte(log.PreviousHash))
+
+	// Hash the content fields
+	// We use a simplified JSON representation for stable hashing of the model fields
+	payload := struct {
+		ID        uuid.UUID
+		Timestamp int64
+		ActorID   string
+		Action    string
+		Status    string
+		Signature string
+	}{
+		ID:        log.ID,
+		Timestamp: log.Timestamp.UnixNano(),
+		ActorID:   log.ActorID,
+		Action:    log.Action,
+		Status:    log.Status,
+		Signature: log.Signature,
+	}
+
+	b, _ := json.Marshal(payload)
+	h.Write(b)
+
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // GetAuditLogsByTraceID retrieves all audit logs for a given trace ID

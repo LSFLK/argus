@@ -20,7 +20,7 @@ func TestAuditHandler_CreateAuditLog(t *testing.T) {
 	v1testutil.SetupTestEnums()
 
 	mockRepo := v1testutil.NewMockRepository()
-	service := v1services.NewAuditService(mockRepo)
+	service := v1services.NewAuditService(mockRepo, nil)
 	handler := NewAuditHandler(service)
 
 	tests := []struct {
@@ -139,7 +139,7 @@ func TestAuditHandler_CreateAuditLog(t *testing.T) {
 
 func TestAuditHandler_GetAuditLogs(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := v1services.NewAuditService(mockRepo)
+	service := v1services.NewAuditService(mockRepo, nil)
 	handler := NewAuditHandler(service)
 
 	tests := []struct {

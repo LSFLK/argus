@@ -18,6 +18,7 @@ import (
 	"github.com/LSFLK/argus/internal/config"
 	"github.com/LSFLK/argus/internal/database"
 	"github.com/LSFLK/argus/internal/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Build information - set during build
@@ -112,9 +113,13 @@ func main() {
 		}
 	})
 
+	// Initialize security: Public Key Registry
+	keyRegistry := v1services.NewPublicKeyRegistry()
+	// Optionally load keys from config/environment here if needed
+
 	// Initialize v1 API with database-agnostic repository
 	v1Repository := v1database.NewGormRepository(gormDB)
-	v1AuditService := v1services.NewAuditService(v1Repository)
+	v1AuditService := v1services.NewAuditService(v1Repository, keyRegistry)
 	v1AuditHandler := v1handlers.NewAuditHandler(v1AuditService)
 
 	// API endpoint for generalized audit logs (V1)
@@ -129,6 +134,17 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/audit-logs/bulk", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			v1AuditHandler.CreateAuditLogBatch(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
+
 	// Start server
 	slog.Info("Argus starting",
 		"environment", *env,
@@ -139,11 +155,11 @@ func main() {
 	slog.Info("Database configuration",
 		"database_path", dbConfig.DatabasePath)
 
-	// Setup CORS middleware
-	corsMiddleware := middleware.NewCORSMiddleware()
-
-	// Apply middleware chain: CORS -> main handler
-	handler := corsMiddleware(mux)
+	// Setup Middleware Chain
+	// Order (outer to inner): Metrics -> CORS -> Auth -> mux
+	handler := middleware.MetricsMiddleware(mux)
+	handler = middleware.NewCORSMiddleware()(handler)
+	handler = middleware.AuthMiddleware(handler)
 
 	server := &http.Server{
 		Addr:         ":" + serverPort,

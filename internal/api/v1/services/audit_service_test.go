@@ -15,7 +15,7 @@ import (
 func TestAuditService_CreateAuditLog(t *testing.T) {
 	v1testutil.SetupTestEnums()
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo)
+	service := NewAuditService(mockRepo, nil)
 
 	tests := []struct {
 		name    string
@@ -191,7 +191,7 @@ func TestAuditService_CreateAuditLog(t *testing.T) {
 
 func TestAuditService_GetAuditLogs(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo)
+	service := NewAuditService(mockRepo, nil)
 
 	tests := []struct {
 		name      string
@@ -246,7 +246,7 @@ func TestAuditService_GetAuditLogs(t *testing.T) {
 
 func TestAuditService_GetAuditLogByID(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo)
+	service := NewAuditService(mockRepo, nil)
 	ctx := context.Background()
 
 	// Create a test log
@@ -275,7 +275,7 @@ func TestAuditService_GetAuditLogByID(t *testing.T) {
 
 func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo)
+	service := NewAuditService(mockRepo, nil)
 
 	traceID := uuid.New().String()
 
@@ -287,7 +287,7 @@ func TestAuditService_GetAuditLogsByTraceID(t *testing.T) {
 func TestAuditService_CreateAuditLog_InvalidTraceID(t *testing.T) {
 	v1testutil.SetupTestEnums()
 	mockRepo := v1testutil.NewMockRepository()
-	service := NewAuditService(mockRepo)
+	service := NewAuditService(mockRepo, nil)
 
 	req := &v1models.CreateAuditLogRequest{
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
