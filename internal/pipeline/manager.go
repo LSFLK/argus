@@ -85,6 +85,13 @@ func (m *Manager) worker() {
 // Dispatch fans out an audit log to all registered sinks concurrently.
 // It returns a slice of errors encountered during the dispatch process.
 // If one sink fails, it does not prevent others from attempting to write.
+//
+// IMPORTANT (Goroutine Leak Risk): If ctx times out, the wg.Wait() goroutine
+// will persist until ALL sink goroutines return. This is safe ONLY if every
+// registered Sink implementation respects ctx.Done() and returns promptly.
+// If you add a new Sink that does not natively support context cancellation
+// (e.g., an S3Sink using a non-context-aware SDK), you MUST wrap it with
+// a context-aware adapter to prevent goroutine accumulation.
 func (m *Manager) Dispatch(ctx context.Context, log *models.AuditLog) []error {
 	// Implement an internal watchdog to prevent goroutine accumulation
 	// if the parent context doesn't have a deadline and a sink hangs.
@@ -169,23 +176,45 @@ func (m *Manager) DispatchBatch(ctx context.Context, logs []models.AuditLog) []e
 }
 
 // DispatchAsync submits a log for background fan-out.
-func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) {
+// Instead of silently dropping logs when the queue is full (data loss),
+// this now applies backpressure by blocking until the queue has space
+// or a 5-second timeout expires. Callers receiving an error should
+// return HTTP 503 to signal the client to hold onto the data.
+func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error {
 	// Detach context to ensure background workers don't fail when HTTP request completes
 	detachedCtx := context.WithoutCancel(ctx)
+
+	// Apply backpressure instead of dropping: block for up to 5 seconds.
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case m.asyncQueue <- asyncTask{ctx: detachedCtx, log: log}:
-	default:
-		slog.Warn("Pipeline async queue full, dropping log", "id", log.ID)
+		return nil
+	case <-timer.C:
+		slog.Error("Pipeline async queue full after backpressure timeout, rejecting log", "id", log.ID)
+		return fmt.Errorf("async pipeline queue full: backpressure timeout exceeded")
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
 // DispatchBatchAsync submits a batch of logs for background fan-out.
-func (m *Manager) DispatchBatchAsync(ctx context.Context, logs []models.AuditLog) {
+// Applies backpressure instead of silently dropping data.
+func (m *Manager) DispatchBatchAsync(ctx context.Context, logs []models.AuditLog) error {
 	detachedCtx := context.WithoutCancel(ctx)
+
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case m.asyncQueue <- asyncTask{ctx: detachedCtx, logs: logs}:
-	default:
-		slog.Warn("Pipeline async queue full, dropping batch", "count", len(logs))
+		return nil
+	case <-timer.C:
+		slog.Error("Pipeline async queue full after backpressure timeout, rejecting batch", "count", len(logs))
+		return fmt.Errorf("async pipeline queue full: backpressure timeout exceeded")
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

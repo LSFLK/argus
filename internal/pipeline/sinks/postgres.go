@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/google/uuid"
@@ -137,7 +138,7 @@ func (s *PostgresSink) computeHash(log *models.AuditLog) (string, error) {
 	}{
 		ID:                 log.ID,
 		TraceID:            log.TraceID,
-		Timestamp:          log.Timestamp.UnixNano(),
+		Timestamp:          log.Timestamp.Truncate(time.Microsecond).UnixMicro(),
 		EventType:          log.EventType,
 		Action:             log.Action,
 		Status:             log.Status,

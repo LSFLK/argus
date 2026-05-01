@@ -1,19 +1,18 @@
 package audit
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,6 +38,8 @@ type Config struct {
 	BatchSize          int           // Number of logs to send in one batch, defaults to 20
 	BatchInterval      time.Duration // Max time to wait before sending a batch, defaults to 1s
 	HTTPTimeout        time.Duration // Defaults to 10s
+	AuthToken          string        // Bearer token for authentication
+	SpoolDir           string        // Directory for spooling failed batches (empty = disabled)
 }
 
 // Client is a client for sending audit events to the audit service
@@ -54,6 +55,13 @@ type Client struct {
 	wg                 sync.WaitGroup
 	batchSize          int
 	batchInterval      time.Duration
+	authToken          string
+	spoolDir           string
+
+	// closed is an atomic flag to prevent sending on a closed queue.
+	// In Go, sending on a closed channel panics. Instead of closing the channel,
+	// we use this flag to reject new events gracefully during shutdown.
+	closed atomic.Bool
 }
 
 // NewClient creates a new audit client using the provided configuration.
@@ -112,6 +120,14 @@ func NewClient(cfg Config) *Client {
 		timeout = DefaultHTTPTimeout
 	}
 
+	// Initialize spool directory if configured
+	if cfg.SpoolDir != "" {
+		if err := os.MkdirAll(cfg.SpoolDir, 0o750); err != nil {
+			slog.Error("Failed to create spool directory, spooling disabled", "dir", cfg.SpoolDir, "error", err)
+			cfg.SpoolDir = ""
+		}
+	}
+
 	c := &Client{
 		baseURL: cfg.BaseURL,
 		httpClient: &http.Client{
@@ -129,6 +145,8 @@ func NewClient(cfg Config) *Client {
 		quit:               make(chan struct{}),
 		batchSize:          batchSize,
 		batchInterval:      batchInterval,
+		authToken:          cfg.AuthToken,
+		spoolDir:           cfg.SpoolDir,
 	}
 
 	// Start background workers
@@ -142,7 +160,8 @@ func NewClient(cfg Config) *Client {
 		"workers", workerCount,
 		"batchSize", batchSize,
 		"batchInterval", batchInterval,
-		"queueSize", queueSize)
+		"queueSize", queueSize,
+		"spoolDir", cfg.SpoolDir)
 
 	return c
 }
@@ -153,18 +172,29 @@ func (c *Client) IsEnabled() bool {
 }
 
 // LogEvent sends an audit event to the audit service asynchronously via worker queue.
-func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) {
+// Returns false if the client is shutting down or the queue is full.
+func (c *Client) LogEvent(ctx context.Context, event *AuditLogRequest) bool {
 	// Skip if audit client is not enabled
 	if !c.enabled {
-		return
+		return false
 	}
 
-	// Push to queue
+	// CRITICAL: Check the shutdown flag BEFORE sending on the channel.
+	// In Go, sending on a closed channel panics. We never close c.queue;
+	// instead we use this atomic flag to reject new events gracefully.
+	if c.closed.Load() {
+		slog.Warn("Audit client is shutting down, rejecting event", "action", event.Action)
+		return false
+	}
+
+	// Push to queue with backpressure — block up to the request context deadline
+	// rather than silently dropping the event.
 	select {
 	case c.queue <- event:
-		return
-	default:
-		slog.Warn("Audit queue full, dropping event", "action", event.Action)
+		return true
+	case <-ctx.Done():
+		slog.Warn("Audit queue full and context expired, dropping event", "action", event.Action)
+		return false
 	}
 }
 
@@ -201,12 +231,21 @@ func (c *Client) SignEvent(event *AuditLogRequest) error {
 }
 
 // Close gracefully shuts down the client, flushing the queue.
+// It signals workers to stop accepting new work, drains remaining events,
+// and waits for all workers to finish (or for ctx to expire).
 func (c *Client) Close(ctx context.Context) error {
 	if !c.enabled {
 		return nil
 	}
+
+	// Mark as closed first so no new events are accepted.
+	// This MUST happen before signaling quit to prevent the panic anti-pattern.
+	c.closed.Store(true)
+
+	// Signal workers to begin draining and shutting down.
+	// We do NOT close c.queue — the garbage collector will reclaim it.
+	// Closing a channel with concurrent senders causes a panic in Go.
 	close(c.quit)
-	close(c.queue)
 
 	// Wait for workers to finish, but honor context timeout if provided
 	done := make(chan struct{})
@@ -264,10 +303,10 @@ func (c *Client) worker() {
 
 	for {
 		select {
-		case event, ok := <-c.queue:
-			if !ok {
-				flush()
-				return
+		case event := <-c.queue:
+			if event == nil {
+				// Channel was drained or nil received; skip
+				continue
 			}
 
 			// Automatic signing if required
@@ -297,13 +336,26 @@ func (c *Client) worker() {
 		case <-ticker.C:
 			flush()
 		case <-c.quit:
-			flush()
-			return
+			// Drain remaining events from the queue before exiting
+			for {
+				select {
+				case event := <-c.queue:
+					if event == nil {
+						continue
+					}
+					buffer = append(buffer, event)
+				default:
+					// Queue is empty
+					flush()
+					return
+				}
+			}
 		}
 	}
 }
 
-// logBatch sends a batch of audit events to the audit service API
+// logBatch sends a batch of audit events to the audit service API.
+// On final failure after all retries, it spools the batch to disk if SpoolDir is configured.
 func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 	if c.httpClient == nil || len(events) == 0 {
 		return
@@ -330,6 +382,7 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 				backoff *= 2 // Exponential backoff
 			case <-ctx.Done():
 				slog.Error("Context cancelled during retry wait", "error", ctx.Err())
+				c.spoolToDisk(payloadBytes)
 				return
 			}
 		}
@@ -352,20 +405,43 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 			continue
 		}
 
-		defer resp.Body.Close()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 
-		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-			bodyBytes, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusMultiStatus {
 			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(bodyBytes))
 			slog.Warn("Audit service returned error for batch", "status", resp.StatusCode, "body", string(bodyBytes), "attempt", attempt)
 			continue
 		}
 
-		slog.Info("Audit batch logged successfully", "count", len(events))
+		slog.Info("Audit batch logged successfully", "count", len(events), "status", resp.StatusCode)
 		return
 	}
 
 	slog.Error("Audit batch failed after maximum retries", "error", lastErr, "count", len(events))
+	c.spoolToDisk(payloadBytes)
+}
+
+// spoolToDisk writes a failed batch payload to the spool directory as a fallback
+// to prevent permanent data loss when the audit service is unreachable.
+// A background cron or operator can retry these files later.
+func (c *Client) spoolToDisk(payload []byte) {
+	if c.spoolDir == "" {
+		slog.Error("Audit batch permanently lost: spool directory not configured. Set Config.SpoolDir to prevent data loss.")
+		return
+	}
+
+	filename := fmt.Sprintf("argus-spool-%d.json", time.Now().UnixNano())
+	path := filepath.Join(c.spoolDir, filename)
+
+	if err := os.WriteFile(path, payload, 0o640); err != nil {
+		slog.Error("CRITICAL: Failed to spool audit batch to disk — DATA LOSS",
+			"error", err, "path", path, "bytes", len(payload))
+		return
+	}
+
+	slog.Warn("Audit batch spooled to disk for later retry",
+		"path", path, "bytes", len(payload))
 }
 
 // isAuditEnabled checks if audit logging is enabled via environment variable

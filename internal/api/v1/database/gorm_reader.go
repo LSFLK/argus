@@ -44,6 +44,12 @@ func (r *GormReader) GetAuditLogs(ctx context.Context, filters *AuditLogFilters)
 	if filters.Status != nil && *filters.Status != "" {
 		query = query.Where("status = ?", *filters.Status)
 	}
+	if filters.StartTime != nil {
+		query = query.Where("timestamp >= ?", *filters.StartTime)
+	}
+	if filters.EndTime != nil {
+		query = query.Where("timestamp <= ?", *filters.EndTime)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

@@ -158,6 +158,8 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/audit-summary", v1AuditHandler.GetAuditSummary)
+
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 

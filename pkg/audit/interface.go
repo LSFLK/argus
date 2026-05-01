@@ -14,8 +14,10 @@ import (
 // - Graceful degradation when the audit service is unavailable
 // - Thread-safe operations
 type Auditor interface {
-	// LogEvent queues a standard audit event for asynchronous processing
-	LogEvent(ctx context.Context, event *AuditLogRequest)
+	// LogEvent queues a standard audit event for asynchronous processing.
+	// Returns true if the event was accepted, false if the client is
+	// shutting down, disabled, or the queue is full.
+	LogEvent(ctx context.Context, event *AuditLogRequest) bool
 
 	// SignEvent generates a digital signature for the audit request
 	// using the registered SignPayloadFunc

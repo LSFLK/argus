@@ -59,6 +59,11 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateAuditLogBatch handles POST /api/audit-logs/bulk
+// Returns:
+//   - 201 Created: all logs in the batch were successfully ingested
+//   - 207 Multi-Status: some logs succeeded, some failed (partial success)
+//   - 400 Bad Request: all logs failed validation
+//   - 500 Internal Server Error: sink/infrastructure failure
 func (h *AuditHandler) CreateAuditLogBatch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -81,9 +86,14 @@ func (h *AuditHandler) CreateAuditLogBatch(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	logs, err := h.service.CreateAuditLogBatch(r.Context(), req)
+	result, err := h.service.CreateAuditLogBatch(r.Context(), req)
 	if err != nil {
 		if services.IsValidationError(err) {
+			// All logs failed — return 400 with the result showing per-item errors
+			if result != nil {
+				utils.RespondWithJSON(w, http.StatusBadRequest, result)
+				return
+			}
 			utils.RespondWithError(w, http.StatusBadRequest, "Invalid request payload in batch", err)
 			return
 		}
@@ -91,7 +101,12 @@ func (h *AuditHandler) CreateAuditLogBatch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	utils.RespondWithJSON(w, http.StatusCreated, logs)
+	// Determine HTTP status: 207 Multi-Status if any failures, 201 if all succeeded
+	if len(result.Failed) > 0 {
+		utils.RespondWithJSON(w, http.StatusMultiStatus, result)
+	} else {
+		utils.RespondWithJSON(w, http.StatusCreated, result)
+	}
 }
 
 // GetAuditLogs handles GET /api/audit-logs
@@ -205,4 +220,20 @@ func (h *AuditHandler) GetAuditLogByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.RespondWithJSON(w, http.StatusOK, models.ToAuditLogResponse(*log))
+}
+
+// GetAuditSummary handles GET /api/audit-summary
+func (h *AuditHandler) GetAuditSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	summary, err := h.service.GetAuditSummary(r.Context())
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to generate audit summary", err)
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusOK, summary)
 }

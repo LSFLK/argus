@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/google/uuid"
@@ -32,6 +33,8 @@ type AuditLogFilters struct {
 	EventType      *string
 	Action         *string
 	Status         *string
+	StartTime      *time.Time
+	EndTime        *time.Time
 	Limit          int
 	Offset         int
 	IncludeMessage bool
