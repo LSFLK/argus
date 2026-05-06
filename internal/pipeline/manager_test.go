@@ -47,3 +47,4 @@ func (s *failingSink) WriteBatch(ctx context.Context, logs []models.AuditLog) er
 	return errors.New("dispatch batch error from " + s.name)
 }
 func (s *failingSink) Close() error { return nil }
+func (s *failingSink) IsCritical() bool { return true }

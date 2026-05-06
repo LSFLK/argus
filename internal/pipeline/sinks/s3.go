@@ -37,6 +37,12 @@ type S3SinkConfig struct {
 
 // S3Sink implements the Sink interface using the AWS SDK v2 for S3.
 // It uploads signed audit logs directly to S3 with WORM (Object Lock Compliance Mode) enabled.
+//
+// NOTE (Infrastructure / Context Cancellation):
+// When ctx is cancelled, the AWS SDK aborts the upload. If uploading very large files,
+// this might leave incomplete multipart upload parts. To prevent storage charge leakage,
+// ensure the S3 bucket has a lifecycle rule configured to abort incomplete multipart uploads
+// after 1 day (e.g., AbortIncompleteMultipartUpload rule).
 type S3Sink struct {
 	client S3ClientAPI
 	cfg    S3SinkConfig
@@ -113,22 +119,40 @@ func (s *S3Sink) WriteBatch(ctx context.Context, logs []models.AuditLog) error {
 		return nil
 	}
 
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
+	// Group logs by YYYY/MM/DD date string to maintain strict Athena partition boundaries
+	groups := make(map[string][]models.AuditLog)
 	for i := range logs {
-		if err := encoder.Encode(logs[i]); err != nil {
-			return fmt.Errorf("failed to marshal batch audit log at index %d: %w", i, err)
+		dateStr := logs[i].Timestamp.UTC().Format("2006/01/02")
+		groups[dateStr] = append(groups[dateStr], logs[i])
+	}
+
+	// Upload each day-group to its correct date partition folder
+	for _, groupLogs := range groups {
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		for j := range groupLogs {
+			if err := encoder.Encode(groupLogs[j]); err != nil {
+				return fmt.Errorf("failed to marshal batch audit log at index %d: %w", j, err)
+			}
+		}
+
+		key := s.generateKey(groupLogs[0].Timestamp, true, uuid.New())
+		if err := s.upload(ctx, key, buf.Bytes(), "application/x-ndjson"); err != nil {
+			return err
 		}
 	}
 
-	// Use the timestamp of the first log for partitioning
-	key := s.generateKey(logs[0].Timestamp, true, uuid.New())
-	return s.upload(ctx, key, buf.Bytes(), "application/x-ndjson")
+	return nil
 }
 
 // Close is a no-op for S3Sink.
 func (s *S3Sink) Close() error {
 	return nil
+}
+
+// IsCritical returns true for S3Sink.
+func (s *S3Sink) IsCritical() bool {
+	return true
 }
 
 // generateKey constructs a partitioned S3 key based on the log's timestamp.

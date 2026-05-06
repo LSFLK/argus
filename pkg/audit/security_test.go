@@ -235,7 +235,7 @@ func TestClient_SignAndVerify(t *testing.T) {
 	}
 
 	// Sign
-	err = client.SignEvent(req)
+	err = client.SignEvent(ctx, req)
 	if err != nil {
 		t.Fatalf("SignEvent failed: %v", err)
 	}

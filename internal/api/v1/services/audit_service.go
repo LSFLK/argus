@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -19,22 +20,29 @@ import (
 // AuditService handles generalized audit log operations.
 // It uses a Sink Manager to fan out logs to multiple destinations.
 type AuditService struct {
-	pipeline *pipeline.Manager
-	reader   database.AuditReader
-	keys     *PublicKeyRegistry
+	pipeline          *pipeline.Manager
+	reader            database.AuditReader
+	keys              *PublicKeyRegistry
+	requireSignatures bool
 }
 
 // NewAuditService creates a new audit service instance.
 func NewAuditService(mgr *pipeline.Manager, reader database.AuditReader, keys *PublicKeyRegistry) *AuditService {
 	return &AuditService{
-		pipeline: mgr,
-		reader:   reader,
-		keys:     keys,
+		pipeline:          mgr,
+		reader:            reader,
+		keys:              keys,
+		requireSignatures: os.Getenv("REQUIRE_SIGNATURES") == "true",
 	}
 }
 
 // CreateAuditLog creates a new audit log entry from a request
 func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateAuditLogRequest) (*v1models.AuditLog, error) {
+	// Enforce signatures in production if configured
+	if s.requireSignatures && req.Signature == "" {
+		return nil, fmt.Errorf("%w: signature is strictly required for non-repudiation", ErrValidation)
+	}
+
 	// Verify signature if provided
 	if req.Signature != "" {
 		if err := s.verifyRequestSignature(req); err != nil {
@@ -102,8 +110,8 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 			slog.Error("Sink dispatch failed", "error", err)
 		}
 
-		if len(errs) > 0 {
-			return nil, fmt.Errorf("one or more storage sinks failed: %w", errs[0])
+		if s.pipeline.HasCriticalFailure(errs) {
+			return nil, fmt.Errorf("critical storage sink failed: %w", errs[0])
 		}
 	}
 
@@ -124,6 +132,16 @@ func (s *AuditService) CreateAuditLogBatch(ctx context.Context, batchReq v1model
 	validLogs := make([]v1models.AuditLog, 0, len(batchReq))
 
 	for i, req := range batchReq {
+		// Enforce signatures in production if configured
+		if s.requireSignatures && req.Signature == "" {
+			result.Failed = append(result.Failed, v1models.BatchItemError{
+				Index:  i,
+				Error:  "signature is strictly required for non-repudiation",
+				Action: req.Action,
+			})
+			continue
+		}
+
 		// Verify signature if provided — failure routes to DLQ, not batch rejection
 		if req.Signature != "" {
 			if err := s.verifyRequestSignature(&req); err != nil {
@@ -224,9 +242,9 @@ func (s *AuditService) CreateAuditLogBatch(ctx context.Context, batchReq v1model
 				slog.Error("Sink batch dispatch failed", "error", err)
 			}
 
-			// If all sinks failed, return error to client
-			if len(errs) >= len(s.pipeline.Sinks()) {
-				return nil, fmt.Errorf("all storage sinks failed for batch: %w", errs[0])
+			// If any critical storage sink failed, fail the batch operation
+			if s.pipeline.HasCriticalFailure(errs) {
+				return nil, fmt.Errorf("critical storage sink failed for batch: %w", errs[0])
 			}
 		}
 	}

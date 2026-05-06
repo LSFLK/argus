@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/LSFLK/argus/internal/api/v1/models"
@@ -79,21 +80,36 @@ func (s *PostgresSink) WriteBatch(ctx context.Context, logs []models.AuditLog) e
 		// Group logs by ActorID to handle partitioned chains efficiently
 		actorLastHashes := make(map[string]string)
 
+		// 1. Extract unique ActorIDs from the batch to prevent lock interleaving
+		var actorIDs []string
+		actorMap := make(map[string]bool)
+		for i := range logs {
+			aID := logs[i].ActorID
+			if !actorMap[aID] {
+				actorMap[aID] = true
+				actorIDs = append(actorIDs, aID)
+			}
+		}
+
+		// 2. Sort them alphabetically. This guarantees a deterministic lock acquisition
+		// order across all concurrent transactions, completely preventing database deadlocks.
+		sort.Strings(actorIDs)
+
+		// 3. Acquire row-level locks sequentially in sorted order
+		for _, actorID := range actorIDs {
+			var lastLog models.AuditLog
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("actor_id = ?", actorID).
+				Order("created_at DESC, id DESC").
+				First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
+				return err
+			}
+			actorLastHashes[actorID] = lastLog.CurrentHash
+		}
+
+		// 4. Compute hash chain updates using pre-locked hashes
 		for i := range logs {
 			actorID := logs[i].ActorID
-
-			// If we haven't fetched the last hash for this actor in this transaction yet
-			if _, exists := actorLastHashes[actorID]; !exists {
-				var lastLog models.AuditLog
-				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-					Where("actor_id = ?", actorID).
-					Order("created_at DESC, id DESC").
-					First(&lastLog).Error; err != nil && err != gorm.ErrRecordNotFound {
-					return err
-				}
-				actorLastHashes[actorID] = lastLog.CurrentHash
-			}
-
 			logs[i].PreviousHash = actorLastHashes[actorID]
 			currHash, err := s.computeHash(&logs[i])
 			if err != nil {
@@ -111,6 +127,11 @@ func (s *PostgresSink) WriteBatch(ctx context.Context, logs []models.AuditLog) e
 // Close is a no-op for the GORM sink as the connection pool is managed externally.
 func (s *PostgresSink) Close() error {
 	return nil
+}
+
+// IsCritical returns true for PostgresSink.
+func (s *PostgresSink) IsCritical() bool {
+	return true
 }
 
 func (s *PostgresSink) computeHash(log *models.AuditLog) (string, error) {

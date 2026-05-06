@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,4 +232,19 @@ func (m *Manager) Close() []error {
 		}
 	}
 	return errs
+}
+
+// HasCriticalFailure returns true if any of the provided errors originated from a critical sink.
+func (m *Manager) HasCriticalFailure(errs []error) bool {
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		for _, s := range m.sinks {
+			if s.IsCritical() && strings.Contains(err.Error(), "sink "+s.Name()+" failed") {
+				return true
+			}
+		}
+	}
+	return false
 }
