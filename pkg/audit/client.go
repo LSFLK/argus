@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 	"crypto"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -293,11 +295,8 @@ func (c *Client) worker() {
 		if len(buffer) == 0 {
 			return
 		}
-		// Create a context with timeout for the batch
-		ctx, cancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
-		defer cancel()
 
-		c.logBatch(ctx, buffer)
+		c.logBatch(context.Background(), buffer)
 		buffer = make([]*AuditLogRequest, 0, c.batchSize)
 	}
 
@@ -356,7 +355,7 @@ func (c *Client) worker() {
 
 // logBatch sends a batch of audit events to the audit service API.
 // On final failure after all retries, it spools the batch to disk if SpoolDir is configured.
-func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
+func (c *Client) logBatch(parentCtx context.Context, events []*AuditLogRequest) {
 	if c.httpClient == nil || len(events) == 0 {
 		return
 	}
@@ -380,15 +379,19 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 			select {
 			case <-time.After(backoff):
 				backoff *= 2 // Exponential backoff
-			case <-ctx.Done():
-				slog.Error("Context cancelled during retry wait", "error", ctx.Err())
+			case <-parentCtx.Done():
+				slog.Error("Parent context cancelled during retry wait", "error", parentCtx.Err())
 				c.spoolToDisk(payloadBytes)
 				return
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", targetURL, strings.NewReader(string(payloadBytes)))
+		// Create a timeout context for this specific attempt to avoid timeout context exhaustion
+		attemptCtx, attemptCancel := context.WithTimeout(parentCtx, c.httpClient.Timeout)
+
+		req, err := http.NewRequestWithContext(attemptCtx, "POST", targetURL, strings.NewReader(string(payloadBytes)))
 		if err != nil {
+			attemptCancel()
 			slog.Error("Failed to create audit request", "error", err)
 			return
 		}
@@ -400,6 +403,7 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
+			attemptCancel()
 			lastErr = err
 			slog.Warn("Failed to send audit batch", "error", err, "attempt", attempt)
 			continue
@@ -407,6 +411,7 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		attemptCancel()
 
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusMultiStatus {
 			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(bodyBytes))
@@ -431,7 +436,10 @@ func (c *Client) spoolToDisk(payload []byte) {
 		return
 	}
 
-	filename := fmt.Sprintf("argus-spool-%d.json", time.Now().UnixNano())
+	// Generate a cryptographically secure random suffix to prevent file overwrite race conditions under high throughput
+	randomBytes := make([]byte, 4)
+	_, _ = rand.Read(randomBytes)
+	filename := fmt.Sprintf("argus-spool-%d-%s.json", time.Now().UnixNano(), hex.EncodeToString(randomBytes))
 	path := filepath.Join(c.spoolDir, filename)
 
 	if err := os.WriteFile(path, payload, 0o640); err != nil {

@@ -136,7 +136,7 @@ func main() {
 		s3ObjectLockMode := config.GetEnvOrDefault("S3_OBJECT_LOCK_MODE", "COMPLIANCE")
 
 		retentionDays := 2555 // 7 years default
-		if daysStr := os.Getenv("S3_RETENTION_DAYS"); daysStr != "" {
+		if daysStr := config.GetEnvOrDefault("S3_RETENTION_DAYS", ""); daysStr != "" {
 			if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
 				retentionDays = parsedDays
 			}
@@ -262,10 +262,24 @@ func main() {
 	}
 
 	// Close the pipeline manager to flush any pending logs in sinks
-	if errs := pipelineManager.Close(); len(errs) > 0 {
-		for _, err := range errs {
-			slog.Error("Failed to close sink during shutdown", "error", err)
+	done := make(chan struct{})
+	var closeErrs []error
+	go func() {
+		closeErrs = pipelineManager.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		if len(closeErrs) > 0 {
+			for _, err := range closeErrs {
+				slog.Error("Failed to close sink during shutdown", "error", err)
+			}
+		} else {
+			slog.Info("Pipeline gracefully closed")
 		}
+	case <-ctx.Done():
+		slog.Error("Pipeline closure timed out during graceful shutdown")
 	}
 
 	slog.Info("Argus exited")

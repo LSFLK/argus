@@ -29,7 +29,7 @@ type Manager struct {
 
 	// Async worker pool
 	asyncQueue chan asyncTask
-	quit       chan struct{}
+	wg         sync.WaitGroup
 }
 
 type asyncTask struct {
@@ -56,11 +56,11 @@ func NewManager(cfg *Config, sinks ...sinks.Sink) *Manager {
 	m := &Manager{
 		sinks:      sinks,
 		asyncQueue: make(chan asyncTask, cfg.AsyncQueueSize),
-		quit:       make(chan struct{}),
 	}
 
 	// Start a pool of background workers for fire-and-forget sinks
 	for i := 0; i < cfg.WorkerCount; i++ {
+		m.wg.Add(1)
 		go m.worker()
 	}
 
@@ -68,16 +68,12 @@ func NewManager(cfg *Config, sinks ...sinks.Sink) *Manager {
 }
 
 func (m *Manager) worker() {
-	for {
-		select {
-		case task := <-m.asyncQueue:
-			if task.log != nil {
-				_ = m.Dispatch(task.ctx, task.log)
-			} else if task.logs != nil {
-				_ = m.DispatchBatch(task.ctx, task.logs)
-			}
-		case <-m.quit:
-			return
+	defer m.wg.Done()
+	for task := range m.asyncQueue {
+		if task.log != nil {
+			_ = m.Dispatch(task.ctx, task.log)
+		} else if task.logs != nil {
+			_ = m.DispatchBatch(task.ctx, task.logs)
 		}
 	}
 }
@@ -225,7 +221,8 @@ func (m *Manager) Sinks() []sinks.Sink {
 
 // Close gracefully shuts down all registered sinks and the worker pool.
 func (m *Manager) Close() []error {
-	close(m.quit)
+	close(m.asyncQueue)
+	m.wg.Wait()
 
 	var errs []error
 	for _, sink := range m.sinks {

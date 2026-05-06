@@ -114,13 +114,11 @@ func (s *S3Sink) WriteBatch(ctx context.Context, logs []models.AuditLog) error {
 	}
 
 	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
 	for i := range logs {
-		b, err := json.Marshal(logs[i])
-		if err != nil {
+		if err := encoder.Encode(logs[i]); err != nil {
 			return fmt.Errorf("failed to marshal batch audit log at index %d: %w", i, err)
 		}
-		buf.Write(b)
-		buf.WriteByte('\n')
 	}
 
 	// Use the timestamp of the first log for partitioning
