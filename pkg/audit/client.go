@@ -454,7 +454,14 @@ func (c *Client) spoolToDisk(payload []byte) {
 
 	// Generate a cryptographically secure random suffix to prevent file overwrite race conditions under high throughput
 	randomBytes := make([]byte, 4)
-	_, _ = rand.Read(randomBytes)
+	if _, err := rand.Read(randomBytes); err != nil {
+		slog.Error("Failed to generate cryptographically secure random suffix for spool file, falling back to time-derived suffix", "error", err)
+		fallbackVal := uint32(time.Now().UnixNano())
+		randomBytes[0] = byte(fallbackVal)
+		randomBytes[1] = byte(fallbackVal >> 8)
+		randomBytes[2] = byte(fallbackVal >> 16)
+		randomBytes[3] = byte(fallbackVal >> 24)
+	}
 	filename := fmt.Sprintf("argus-spool-%d-%s.json", time.Now().UnixNano(), hex.EncodeToString(randomBytes))
 	path := filepath.Join(c.spoolDir, filename)
 

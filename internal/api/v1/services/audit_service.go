@@ -99,7 +99,11 @@ func (s *AuditService) CreateAuditLog(ctx context.Context, req *v1models.CreateA
 
 	// Set default values before dispatching to sinks
 	if auditLog.ID == uuid.Nil {
-		auditLog.ID = uuid.Must(uuid.NewV7())
+		id, err := uuid.NewV7()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate UUID v7: %w", err)
+		}
+		auditLog.ID = id
 	}
 	auditLog.CreatedAt = time.Now().UTC()
 
@@ -227,7 +231,11 @@ func (s *AuditService) CreateAuditLogBatch(ctx context.Context, batchReq v1model
 	// Populate IDs and Timestamps for the valid batch
 	for i := range validLogs {
 		if validLogs[i].ID == uuid.Nil {
-			validLogs[i].ID = uuid.Must(uuid.NewV7())
+			id, err := uuid.NewV7()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate UUID v7 for batch item %d: %w", i, err)
+			}
+			validLogs[i].ID = id
 		}
 		validLogs[i].CreatedAt = time.Now().UTC()
 	}

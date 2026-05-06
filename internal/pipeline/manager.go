@@ -26,11 +26,11 @@ type Config struct {
 // Manager coordinates the fan-out of audit logs to multiple registered sinks.
 // It supports both synchronous and asynchronous dispatching.
 type Manager struct {
-	sinks []sinks.Sink
-
-	// Async worker pool
+	sinks      []sinks.Sink
 	asyncQueue chan asyncTask
 	wg         sync.WaitGroup
+	closed     bool
+	mu         sync.RWMutex
 }
 
 type asyncTask struct {
@@ -178,6 +178,13 @@ func (m *Manager) DispatchBatch(ctx context.Context, logs []models.AuditLog) []e
 // or a 5-second timeout expires. Callers receiving an error should
 // return HTTP 503 to signal the client to hold onto the data.
 func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error {
+	m.mu.RLock()
+	if m.closed {
+		m.mu.RUnlock()
+		return fmt.Errorf("pipeline manager is closed")
+	}
+	defer m.mu.RUnlock()
+
 	// Detach context to ensure background workers don't fail when HTTP request completes
 	detachedCtx := context.WithoutCancel(ctx)
 
@@ -199,6 +206,13 @@ func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error
 // DispatchBatchAsync submits a batch of logs for background fan-out.
 // Applies backpressure instead of silently dropping data.
 func (m *Manager) DispatchBatchAsync(ctx context.Context, logs []models.AuditLog) error {
+	m.mu.RLock()
+	if m.closed {
+		m.mu.RUnlock()
+		return fmt.Errorf("pipeline manager is closed")
+	}
+	defer m.mu.RUnlock()
+
 	detachedCtx := context.WithoutCancel(ctx)
 
 	timer := time.NewTimer(5 * time.Second)
@@ -222,7 +236,15 @@ func (m *Manager) Sinks() []sinks.Sink {
 
 // Close gracefully shuts down all registered sinks and the worker pool.
 func (m *Manager) Close() []error {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.closed = true
 	close(m.asyncQueue)
+	m.mu.Unlock()
+
 	m.wg.Wait()
 
 	var errs []error
