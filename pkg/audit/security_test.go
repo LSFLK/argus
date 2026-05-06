@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -33,19 +32,28 @@ func TestCanonicalizeRequest(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(b, &parsed); err != nil {
-		t.Fatalf("failed to decode canonical json: %v", err)
+	canonical := string(b)
+
+	// The canonical format is pipe-delimited and should never contain signature fields
+	if bytes.Contains(b, []byte("should-be-stripped")) {
+		t.Errorf("expected signature value to not appear in canonical output")
+	}
+	if bytes.Contains(b, []byte("RS256")) {
+		t.Errorf("expected signatureAlgorithm to not appear in canonical output")
+	}
+	if bytes.Contains(b, []byte("key-1")) {
+		t.Errorf("expected publicKeyId to not appear in canonical output")
 	}
 
-	if _, ok := parsed["signature"]; ok {
-		t.Errorf("expected signature to be stripped")
+	// Verify key fields ARE present
+	if !bytes.Contains(b, []byte("trace-123")) {
+		t.Errorf("expected traceId in canonical output, got: %s", canonical)
 	}
-	if _, ok := parsed["signature_algorithm"]; ok {
-		t.Errorf("expected signature_algorithm to be stripped")
+	if !bytes.Contains(b, []byte("actor-1")) {
+		t.Errorf("expected actorId in canonical output, got: %s", canonical)
 	}
-	if _, ok := parsed["public_key_id"]; ok {
-		t.Errorf("expected public_key_id to be stripped")
+	if !bytes.Contains(b, []byte("target-1")) {
+		t.Errorf("expected targetId in canonical output, got: %s", canonical)
 	}
 }
 
@@ -280,7 +288,7 @@ func TestCanonicalizeRequest_DeepSorting(t *testing.T) {
 		t.Errorf("expected canonicalization to sort keys in Metadata")
 	}
 
-	// Verify it contains the sorted keys
+	// The metadata JSON segment within the pipe-delimited string should have sorted keys
 	if !bytes.Contains(b1, []byte(`"a":"first","m":"middle","z":"last"`)) {
 		t.Errorf("expected sorted metadata in output, got %s", string(b1))
 	}

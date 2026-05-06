@@ -2,17 +2,21 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/LSFLK/argus/internal/api/v1/models"
 	"github.com/google/uuid"
 )
 
-// AuditRepository defines the database-agnostic interface for audit log operations
-// This allows the service to work with any database implementation (PostgreSQL, MongoDB, etc.)
-type AuditRepository interface {
-	// CreateAuditLog creates a new audit log entry
-	CreateAuditLog(ctx context.Context, log *models.AuditLog) (*models.AuditLog, error)
+const (
+	// Pagination defaults
+	DefaultLimit = 100
+	MaxLimit     = 1000
+)
 
+// AuditReader defines the interface for querying audit logs.
+// This is used by the service layer to retrieve logs from a primary storage backend.
+type AuditReader interface {
 	// GetAuditLogsByTraceID retrieves all audit logs for a given trace ID
 	GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]models.AuditLog, error)
 
@@ -29,6 +33,8 @@ type AuditLogFilters struct {
 	EventType      *string
 	Action         *string
 	Status         *string
+	StartTime      *time.Time
+	EndTime        *time.Time
 	Limit          int
 	Offset         int
 	IncludeMessage bool

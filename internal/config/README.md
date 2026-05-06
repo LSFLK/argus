@@ -71,3 +71,14 @@ When your services send audit events to Argus:
 - **Required fields** (`actorType`, `targetType`) → Must match configured values
 
 This ensures data consistency and helps catch integration errors early.
+
+## Environment Configuration
+
+In addition to the `enums.yaml` file, Argus relies on several environment variables for security and operational configuration:
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `ARGUS_AUTH_TOKEN` | **Yes** | - | A high-entropy Bearer token required for all API write operations. Argus fails closed if this is missing. |
+| `ENVIRONMENT` | No | `development` | Setting to `production` enables stricter logging and security defaults. |
+| `DB_TYPE` | No | `sqlite` | Database engine to use (`sqlite` or `postgres`). |
+| `AUDIT_ENUMS_CONFIG` | No | `configs/enums.yaml` | Override path for the Event Type configuration file. |

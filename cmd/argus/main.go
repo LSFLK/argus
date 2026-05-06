@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,6 +19,9 @@ import (
 	"github.com/LSFLK/argus/internal/config"
 	"github.com/LSFLK/argus/internal/database"
 	"github.com/LSFLK/argus/internal/middleware"
+	"github.com/LSFLK/argus/internal/pipeline"
+	"github.com/LSFLK/argus/internal/pipeline/sinks"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Build information - set during build
@@ -112,9 +116,73 @@ func main() {
 		}
 	})
 
-	// Initialize v1 API with database-agnostic repository
-	v1Repository := v1database.NewGormRepository(gormDB)
-	v1AuditService := v1services.NewAuditService(v1Repository)
+	// Initialize security: Public Key Registry
+	keyRegistry := v1services.NewPublicKeyRegistry()
+	// Optionally load keys from config/environment here if needed
+
+	// Initialize Sinks (Writers)
+	postgresSink := sinks.NewPostgresSink(gormDB)
+	consoleSink := sinks.NewConsoleSink()
+
+	activeSinks := []sinks.Sink{postgresSink, consoleSink}
+
+	// Initialize S3 Compliance Sink if configured
+	s3Bucket := config.GetEnvOrDefault("S3_COMPLIANCE_BUCKET", "")
+	if s3Bucket != "" {
+		s3Region := config.GetEnvOrDefault("S3_REGION", "us-east-1")
+		s3Prefix := config.GetEnvOrDefault("S3_PREFIX", "audit-logs")
+		s3Endpoint := config.GetEnvOrDefault("S3_ENDPOINT", "")
+		s3UsePathStyle := config.GetEnvOrDefault("S3_USE_PATH_STYLE", "") == "true"
+		s3ObjectLockMode := config.GetEnvOrDefault("S3_OBJECT_LOCK_MODE", "COMPLIANCE")
+
+		retentionDays := 2555 // 7 years default
+		if daysStr := os.Getenv("S3_RETENTION_DAYS"); daysStr != "" {
+			if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
+				retentionDays = parsedDays
+			}
+		}
+
+		s3Cfg := sinks.S3SinkConfig{
+			Bucket:         s3Bucket,
+			Region:         s3Region,
+			Prefix:         s3Prefix,
+			Endpoint:       s3Endpoint,
+			UsePathStyle:   s3UsePathStyle,
+			ObjectLockMode: s3ObjectLockMode,
+			RetentionDays:  retentionDays,
+		}
+
+		slog.Info("Initializing S3 Compliance Sink with Object Lock",
+			"bucket", s3Cfg.Bucket,
+			"region", s3Cfg.Region,
+			"prefix", s3Cfg.Prefix,
+			"endpoint", s3Cfg.Endpoint,
+			"objectLockMode", s3Cfg.ObjectLockMode,
+			"retentionDays", s3Cfg.RetentionDays)
+
+		s3Sink, err := sinks.NewS3Sink(context.Background(), s3Cfg, nil)
+		if err != nil {
+			slog.Error("Failed to initialize S3 Compliance Sink", "error", err)
+			os.Exit(1)
+		}
+		activeSinks = append(activeSinks, s3Sink)
+	} else {
+		slog.Info("S3 Compliance Sink not configured (set S3_COMPLIANCE_BUCKET to enable)")
+	}
+
+	// Initialize Readers (Query)
+	gormReader := v1database.NewGormReader(gormDB)
+
+	// Initialize Sink Manager (Router)
+	// This enables Argus to fan out logs to multiple destinations concurrently.
+	pipelineManager := pipeline.NewManager(&pipeline.Config{
+		AsyncQueueSize: 1000,
+		WorkerCount:    5,
+	}, activeSinks...)
+
+	// Initialize v1 API
+	// The service layer now depends on the Manager for writes and GormReader for reads.
+	v1AuditService := v1services.NewAuditService(pipelineManager, gormReader, keyRegistry)
 	v1AuditHandler := v1handlers.NewAuditHandler(v1AuditService)
 
 	// API endpoint for generalized audit logs (V1)
@@ -129,6 +197,19 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/audit-logs/bulk", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			v1AuditHandler.CreateAuditLogBatch(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/audit-summary", v1AuditHandler.GetAuditSummary)
+
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
+
 	// Start server
 	slog.Info("Argus starting",
 		"environment", *env,
@@ -139,11 +220,11 @@ func main() {
 	slog.Info("Database configuration",
 		"database_path", dbConfig.DatabasePath)
 
-	// Setup CORS middleware
-	corsMiddleware := middleware.NewCORSMiddleware()
-
-	// Apply middleware chain: CORS -> main handler
-	handler := corsMiddleware(mux)
+	// Setup Middleware Chain
+	// Order (outer to inner): Metrics -> CORS -> Auth -> mux
+	handler := middleware.MetricsMiddleware(mux)
+	handler = middleware.NewCORSMiddleware()(handler)
+	handler = middleware.AuthMiddleware(handler)
 
 	server := &http.Server{
 		Addr:         ":" + serverPort,
@@ -178,6 +259,13 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		slog.Error("Server forced to shutdown", "error", err)
 		os.Exit(1)
+	}
+
+	// Close the pipeline manager to flush any pending logs in sinks
+	if errs := pipelineManager.Close(); len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("Failed to close sink during shutdown", "error", err)
+		}
 	}
 
 	slog.Info("Argus exited")

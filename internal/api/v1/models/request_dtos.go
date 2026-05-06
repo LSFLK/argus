@@ -31,3 +31,6 @@ type CreateAuditLogRequest struct {
 	SignatureAlgorithm string `json:"signatureAlgorithm,omitempty"`
 	PublicKeyID        string `json:"publicKeyId,omitempty"`
 }
+
+// CreateAuditLogBatchRequest represents a batch of audit log creation requests
+type CreateAuditLogBatchRequest []CreateAuditLogRequest

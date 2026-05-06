@@ -18,18 +18,64 @@ import (
 // without exposing private keys to the audit library.
 type SignPayloadFunc func(ctx context.Context, payload []byte) (signature string, err error)
 
-// CanonicalizeRequest serializes the AuditLogRequest deterministically.
-// It ensures that signature fields are not included in the payload that gets signed.
+// CanonicalizeRequest creates a deterministic byte representation of an AuditLogRequest
+// for cryptographic signing and verification.
+//
+// IMPORTANT: This uses a pipe-delimited format instead of JSON serialization.
+// json.Marshal output is Go-specific (spacing, key ordering of maps, encoding of
+// special characters) and is extremely difficult to reproduce byte-for-byte in other
+// languages like Python or Node.js. By using a simple pipe-delimited format, any
+// language in NSW's polyglot ecosystem can trivially compute the same canonical payload.
+//
+// Canonical format (fields separated by "|"):
+//
+//	TraceID|Timestamp|EventType|Action|Status|ActorType|ActorID|TargetType|TargetID|Message|MetadataJSON
+//
+// Rules:
+//   - nil/empty pointer fields use the empty string ""
+//   - Message bytes are base64-encoded (standard encoding, no padding trimming)
+//   - Metadata map is serialized via json.Marshal (maps have sorted keys in Go 1.8+),
+//     but since this is a simple map[string]interface{}, most languages can reproduce it.
+//     An empty/nil map serializes as "{}"
 func CanonicalizeRequest(event *AuditLogRequest) ([]byte, error) {
-	// Create a shallow copy and clear signature fields
-	eventCopy := *event
-	eventCopy.Signature = ""
-	eventCopy.SignatureAlgorithm = ""
-	eventCopy.PublicKeyID = ""
+	traceID := ""
+	if event.TraceID != nil {
+		traceID = *event.TraceID
+	}
 
-	// json.Marshal guarantees struct fields are serialized in declaration order.
-	// For maps (the new Metadata field), keys are sorted alphabetically.
-	return json.Marshal(&eventCopy)
+	targetID := ""
+	if event.TargetID != nil {
+		targetID = *event.TargetID
+	}
+
+	// Base64-encode message bytes for safe textual representation
+	msgEncoded := base64.StdEncoding.EncodeToString(event.Message)
+
+	// Serialize metadata deterministically
+	metadataJSON := "{}"
+	if event.Metadata != nil {
+		metaBytes, err := json.Marshal(event.Metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal metadata for canonicalization: %w", err)
+		}
+		metadataJSON = string(metaBytes)
+	}
+
+	canonical := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+		traceID,
+		event.Timestamp,
+		event.EventType,
+		event.Action,
+		event.Status,
+		event.ActorType,
+		event.ActorID,
+		event.TargetType,
+		targetID,
+		msgEncoded,
+		metadataJSON,
+	)
+
+	return []byte(canonical), nil
 }
 
 // SignPayload hashes and signs the canonical payload using the provided signer.
