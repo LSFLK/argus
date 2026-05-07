@@ -47,3 +47,8 @@ func (s *ConsoleSink) WriteBatch(ctx context.Context, logs []models.AuditLog) er
 func (s *ConsoleSink) Close() error {
 	return nil
 }
+
+// IsCritical returns false for ConsoleSink.
+func (s *ConsoleSink) IsCritical() bool {
+	return false
+}

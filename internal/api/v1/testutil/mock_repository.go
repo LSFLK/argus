@@ -62,6 +62,11 @@ func (m *MockRepository) Close() error {
 	return nil
 }
 
+// IsCritical returns true for MockRepository.
+func (m *MockRepository) IsCritical() bool {
+	return true
+}
+
 // GetAuditLogsByTraceID retrieves all audit logs for a given trace ID (implements database.AuditReader).
 func (m *MockRepository) GetAuditLogsByTraceID(ctx context.Context, traceID string) ([]v1models.AuditLog, error) {
 	traceUUID, err := uuid.Parse(traceID)

@@ -159,9 +159,13 @@ func (AuditLog) TableName() string {
 
 // BeforeCreate hook to set default values
 func (l *AuditLog) BeforeCreate(tx *gorm.DB) error {
-	// Generate ID if not set
+	// Generate time-ordered UUID v7 if not set
 	if l.ID == uuid.Nil {
-		l.ID = uuid.New()
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("failed to generate UUID v7: %w", err)
+		}
+		l.ID = id
 	}
 
 	// Timestamp should already be set by the service layer (required field)

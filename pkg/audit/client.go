@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 	"crypto"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,6 +64,9 @@ type Client struct {
 	// In Go, sending on a closed channel panics. Instead of closing the channel,
 	// we use this flag to reject new events gracefully during shutdown.
 	closed atomic.Bool
+
+	// shutdownCtx carries the context of Close() during shutdown to background workers
+	shutdownCtx context.Context
 }
 
 // NewClient creates a new audit client using the provided configuration.
@@ -206,7 +211,7 @@ func (c *Client) LogSignedEvent(ctx context.Context, event *AuditLogRequest) {
 
 // SignEvent generates a cryptographic signature for the given request
 // using the registered SignPayloadFunc.
-func (c *Client) SignEvent(event *AuditLogRequest) error {
+func (c *Client) SignEvent(ctx context.Context, event *AuditLogRequest) error {
 	if c.signer == nil {
 		return fmt.Errorf("no signer registered with the client")
 	}
@@ -216,9 +221,9 @@ func (c *Client) SignEvent(event *AuditLogRequest) error {
 		return fmt.Errorf("failed to canonicalize event: %w", err)
 	}
 
-	// Using context.Background() for the signing callback as the original caller's context
-	// may have expired if called from the background worker.
-	sigBase64, err := c.signer(context.Background(), payload)
+	// Propagate the provided context to the signer function (such as KMS/HSM integration)
+	// to prevent infinite hangs or leaks.
+	sigBase64, err := c.signer(ctx, payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign event: %w", err)
 	}
@@ -241,6 +246,9 @@ func (c *Client) Close(ctx context.Context) error {
 	// Mark as closed first so no new events are accepted.
 	// This MUST happen before signaling quit to prevent the panic anti-pattern.
 	c.closed.Store(true)
+
+	// Propagate the shutdown context to background workers safely before closing c.quit
+	c.shutdownCtx = ctx
 
 	// Signal workers to begin draining and shutting down.
 	// We do NOT close c.queue — the garbage collector will reclaim it.
@@ -289,15 +297,12 @@ func (c *Client) worker() {
 	ticker := time.NewTicker(c.batchInterval)
 	defer ticker.Stop()
 
-	flush := func() {
+	flush := func(fCtx context.Context) {
 		if len(buffer) == 0 {
 			return
 		}
-		// Create a context with timeout for the batch
-		ctx, cancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
-		defer cancel()
 
-		c.logBatch(ctx, buffer)
+		c.logBatch(fCtx, buffer)
 		buffer = make([]*AuditLogRequest, 0, c.batchSize)
 	}
 
@@ -313,7 +318,11 @@ func (c *Client) worker() {
 			if event.ShouldSign {
 				var signErr error
 				for attempt := 1; attempt <= 3; attempt++ {
-					if signErr = c.SignEvent(event); signErr == nil {
+					// Create a timeout context for signing to avoid unbounded KMS/HSM hangs
+					signCtx, signCancel := context.WithTimeout(context.Background(), c.httpClient.Timeout)
+					signErr = c.SignEvent(signCtx, event)
+					signCancel()
+					if signErr == nil {
 						break
 					}
 					slog.Warn("Failed to sign event in worker, retrying",
@@ -331,11 +340,17 @@ func (c *Client) worker() {
 
 			buffer = append(buffer, event)
 			if len(buffer) >= c.batchSize {
-				flush()
+				flush(context.Background())
 			}
 		case <-ticker.C:
-			flush()
+			flush(context.Background())
 		case <-c.quit:
+			// Retrieve the shutdown context passed during Close()
+			shutdownCtx := c.shutdownCtx
+			if shutdownCtx == nil {
+				shutdownCtx = context.Background()
+			}
+
 			// Drain remaining events from the queue before exiting
 			for {
 				select {
@@ -346,7 +361,7 @@ func (c *Client) worker() {
 					buffer = append(buffer, event)
 				default:
 					// Queue is empty
-					flush()
+					flush(shutdownCtx)
 					return
 				}
 			}
@@ -356,7 +371,7 @@ func (c *Client) worker() {
 
 // logBatch sends a batch of audit events to the audit service API.
 // On final failure after all retries, it spools the batch to disk if SpoolDir is configured.
-func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
+func (c *Client) logBatch(parentCtx context.Context, events []*AuditLogRequest) {
 	if c.httpClient == nil || len(events) == 0 {
 		return
 	}
@@ -380,15 +395,19 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 			select {
 			case <-time.After(backoff):
 				backoff *= 2 // Exponential backoff
-			case <-ctx.Done():
-				slog.Error("Context cancelled during retry wait", "error", ctx.Err())
+			case <-parentCtx.Done():
+				slog.Error("Parent context cancelled during retry wait", "error", parentCtx.Err())
 				c.spoolToDisk(payloadBytes)
 				return
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", targetURL, strings.NewReader(string(payloadBytes)))
+		// Create a timeout context for this specific attempt to avoid timeout context exhaustion
+		attemptCtx, attemptCancel := context.WithTimeout(parentCtx, c.httpClient.Timeout)
+
+		req, err := http.NewRequestWithContext(attemptCtx, "POST", targetURL, strings.NewReader(string(payloadBytes)))
 		if err != nil {
+			attemptCancel()
 			slog.Error("Failed to create audit request", "error", err)
 			return
 		}
@@ -400,6 +419,7 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
+			attemptCancel()
 			lastErr = err
 			slog.Warn("Failed to send audit batch", "error", err, "attempt", attempt)
 			continue
@@ -407,6 +427,7 @@ func (c *Client) logBatch(ctx context.Context, events []*AuditLogRequest) {
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		attemptCancel()
 
 		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusMultiStatus {
 			lastErr = fmt.Errorf("server returned %d: %s", resp.StatusCode, string(bodyBytes))
@@ -431,7 +452,17 @@ func (c *Client) spoolToDisk(payload []byte) {
 		return
 	}
 
-	filename := fmt.Sprintf("argus-spool-%d.json", time.Now().UnixNano())
+	// Generate a cryptographically secure random suffix to prevent file overwrite race conditions under high throughput
+	randomBytes := make([]byte, 4)
+	if _, err := rand.Read(randomBytes); err != nil {
+		slog.Error("Failed to generate cryptographically secure random suffix for spool file, falling back to time-derived suffix", "error", err)
+		fallbackVal := uint32(time.Now().UnixNano())
+		randomBytes[0] = byte(fallbackVal)
+		randomBytes[1] = byte(fallbackVal >> 8)
+		randomBytes[2] = byte(fallbackVal >> 16)
+		randomBytes[3] = byte(fallbackVal >> 24)
+	}
+	filename := fmt.Sprintf("argus-spool-%d-%s.json", time.Now().UnixNano(), hex.EncodeToString(randomBytes))
 	path := filepath.Join(c.spoolDir, filename)
 
 	if err := os.WriteFile(path, payload, 0o640); err != nil {

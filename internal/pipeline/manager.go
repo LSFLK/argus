@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -25,17 +26,31 @@ type Config struct {
 // Manager coordinates the fan-out of audit logs to multiple registered sinks.
 // It supports both synchronous and asynchronous dispatching.
 type Manager struct {
-	sinks []sinks.Sink
-
-	// Async worker pool
+	sinks      []sinks.Sink
 	asyncQueue chan asyncTask
-	quit       chan struct{}
+	wg         sync.WaitGroup
+	closed     bool
+	mu         sync.RWMutex
 }
 
 type asyncTask struct {
 	ctx  context.Context
 	log  *models.AuditLog
 	logs []models.AuditLog
+}
+
+// SinkError wraps an error encountered by a specific sink to enable type-safe checking.
+type SinkError struct {
+	SinkName string
+	Err      error
+}
+
+func (e *SinkError) Error() string {
+	return fmt.Sprintf("sink %s failed: %v", e.SinkName, e.Err)
+}
+
+func (e *SinkError) Unwrap() error {
+	return e.Err
 }
 
 // NewManager creates a new pipeline manager and starts background workers for async dispatch.
@@ -56,11 +71,11 @@ func NewManager(cfg *Config, sinks ...sinks.Sink) *Manager {
 	m := &Manager{
 		sinks:      sinks,
 		asyncQueue: make(chan asyncTask, cfg.AsyncQueueSize),
-		quit:       make(chan struct{}),
 	}
 
 	// Start a pool of background workers for fire-and-forget sinks
 	for i := 0; i < cfg.WorkerCount; i++ {
+		m.wg.Add(1)
 		go m.worker()
 	}
 
@@ -68,16 +83,12 @@ func NewManager(cfg *Config, sinks ...sinks.Sink) *Manager {
 }
 
 func (m *Manager) worker() {
-	for {
-		select {
-		case task := <-m.asyncQueue:
-			if task.log != nil {
-				_ = m.Dispatch(task.ctx, task.log)
-			} else if task.logs != nil {
-				_ = m.DispatchBatch(task.ctx, task.logs)
-			}
-		case <-m.quit:
-			return
+	defer m.wg.Done()
+	for task := range m.asyncQueue {
+		if task.log != nil {
+			_ = m.Dispatch(task.ctx, task.log)
+		} else if task.logs != nil {
+			_ = m.DispatchBatch(task.ctx, task.logs)
 		}
 	}
 }
@@ -113,7 +124,7 @@ func (m *Manager) Dispatch(ctx context.Context, log *models.AuditLog) []error {
 			defer wg.Done()
 			if err := s.Write(ctx, log); err != nil {
 				errMu.Lock()
-				errs = append(errs, fmt.Errorf("sink %s failed: %w", s.Name(), err))
+				errs = append(errs, &SinkError{SinkName: s.Name(), Err: err})
 				errMu.Unlock()
 			}
 		}(sink)
@@ -155,7 +166,7 @@ func (m *Manager) DispatchBatch(ctx context.Context, logs []models.AuditLog) []e
 			defer wg.Done()
 			if err := s.WriteBatch(ctx, logs); err != nil {
 				errMu.Lock()
-				errs = append(errs, fmt.Errorf("sink %s failed: %w", s.Name(), err))
+				errs = append(errs, &SinkError{SinkName: s.Name(), Err: err})
 				errMu.Unlock()
 			}
 		}(sink)
@@ -181,6 +192,13 @@ func (m *Manager) DispatchBatch(ctx context.Context, logs []models.AuditLog) []e
 // or a 5-second timeout expires. Callers receiving an error should
 // return HTTP 503 to signal the client to hold onto the data.
 func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.closed {
+		return fmt.Errorf("pipeline manager is closed")
+	}
+
 	// Detach context to ensure background workers don't fail when HTTP request completes
 	detachedCtx := context.WithoutCancel(ctx)
 
@@ -202,6 +220,13 @@ func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error
 // DispatchBatchAsync submits a batch of logs for background fan-out.
 // Applies backpressure instead of silently dropping data.
 func (m *Manager) DispatchBatchAsync(ctx context.Context, logs []models.AuditLog) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.closed {
+		return fmt.Errorf("pipeline manager is closed")
+	}
+
 	detachedCtx := context.WithoutCancel(ctx)
 
 	timer := time.NewTimer(5 * time.Second)
@@ -225,7 +250,16 @@ func (m *Manager) Sinks() []sinks.Sink {
 
 // Close gracefully shuts down all registered sinks and the worker pool.
 func (m *Manager) Close() []error {
-	close(m.quit)
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.closed = true
+	close(m.asyncQueue)
+	m.mu.Unlock()
+
+	m.wg.Wait()
 
 	var errs []error
 	for _, sink := range m.sinks {
@@ -234,4 +268,22 @@ func (m *Manager) Close() []error {
 		}
 	}
 	return errs
+}
+
+// HasCriticalFailure returns true if any of the provided errors originated from a critical sink.
+func (m *Manager) HasCriticalFailure(errs []error) bool {
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		var sinkErr *SinkError
+		if errors.As(err, &sinkErr) {
+			for _, s := range m.sinks {
+				if s.Name() == sinkErr.SinkName && s.IsCritical() {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

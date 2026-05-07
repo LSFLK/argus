@@ -21,7 +21,7 @@ type Auditor interface {
 
 	// SignEvent generates a digital signature for the audit request
 	// using the registered SignPayloadFunc
-	SignEvent(event *AuditLogRequest) error
+	SignEvent(ctx context.Context, event *AuditLogRequest) error
 
 	// LogSignedEvent queues an event that already contains a cryptographic signature
 	LogSignedEvent(ctx context.Context, event *AuditLogRequest)

@@ -23,4 +23,7 @@ type Sink interface {
 	// Close performs any necessary cleanup, such as flushing buffers
 	// or closing database connections.
 	Close() error
+
+	// IsCritical returns whether write failure to this sink must fail the request.
+	IsCritical() bool
 }
