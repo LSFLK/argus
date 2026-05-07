@@ -2,9 +2,9 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +37,20 @@ type asyncTask struct {
 	ctx  context.Context
 	log  *models.AuditLog
 	logs []models.AuditLog
+}
+
+// SinkError wraps an error encountered by a specific sink to enable type-safe checking.
+type SinkError struct {
+	SinkName string
+	Err      error
+}
+
+func (e *SinkError) Error() string {
+	return fmt.Sprintf("sink %s failed: %v", e.SinkName, e.Err)
+}
+
+func (e *SinkError) Unwrap() error {
+	return e.Err
 }
 
 // NewManager creates a new pipeline manager and starts background workers for async dispatch.
@@ -110,7 +124,7 @@ func (m *Manager) Dispatch(ctx context.Context, log *models.AuditLog) []error {
 			defer wg.Done()
 			if err := s.Write(ctx, log); err != nil {
 				errMu.Lock()
-				errs = append(errs, fmt.Errorf("sink %s failed: %w", s.Name(), err))
+				errs = append(errs, &SinkError{SinkName: s.Name(), Err: err})
 				errMu.Unlock()
 			}
 		}(sink)
@@ -152,7 +166,7 @@ func (m *Manager) DispatchBatch(ctx context.Context, logs []models.AuditLog) []e
 			defer wg.Done()
 			if err := s.WriteBatch(ctx, logs); err != nil {
 				errMu.Lock()
-				errs = append(errs, fmt.Errorf("sink %s failed: %w", s.Name(), err))
+				errs = append(errs, &SinkError{SinkName: s.Name(), Err: err})
 				errMu.Unlock()
 			}
 		}(sink)
@@ -179,11 +193,11 @@ func (m *Manager) DispatchBatch(ctx context.Context, logs []models.AuditLog) []e
 // return HTTP 503 to signal the client to hold onto the data.
 func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.closed {
-		m.mu.RUnlock()
 		return fmt.Errorf("pipeline manager is closed")
 	}
-	defer m.mu.RUnlock()
 
 	// Detach context to ensure background workers don't fail when HTTP request completes
 	detachedCtx := context.WithoutCancel(ctx)
@@ -207,11 +221,11 @@ func (m *Manager) DispatchAsync(ctx context.Context, log *models.AuditLog) error
 // Applies backpressure instead of silently dropping data.
 func (m *Manager) DispatchBatchAsync(ctx context.Context, logs []models.AuditLog) error {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.closed {
-		m.mu.RUnlock()
 		return fmt.Errorf("pipeline manager is closed")
 	}
-	defer m.mu.RUnlock()
 
 	detachedCtx := context.WithoutCancel(ctx)
 
@@ -262,9 +276,12 @@ func (m *Manager) HasCriticalFailure(errs []error) bool {
 		if err == nil {
 			continue
 		}
-		for _, s := range m.sinks {
-			if s.IsCritical() && strings.Contains(err.Error(), "sink "+s.Name()+" failed") {
-				return true
+		var sinkErr *SinkError
+		if errors.As(err, &sinkErr) {
+			for _, s := range m.sinks {
+				if s.Name() == sinkErr.SinkName && s.IsCritical() {
+					return true
+				}
 			}
 		}
 	}
