@@ -7,6 +7,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"testing"
 	"time"
@@ -383,3 +385,114 @@ func TestClient_SignRetry(t *testing.T) {
 
 	_ = client.Close(ctx)
 }
+
+func TestPEMSigningAndVerification_RSA(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate RSA key: %v", err)
+	}
+
+	privBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		t.Fatalf("failed to marshal private key: %v", err)
+	}
+	privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+
+	pubBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		t.Fatalf("failed to marshal public key: %v", err)
+	}
+	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes})
+
+	payload := []byte("hello, audit logs")
+
+	sig, alg, err := SignPayloadPEM(payload, privPEM)
+	if err != nil {
+		t.Fatalf("SignPayloadPEM failed: %v", err)
+	}
+	if alg != "RS256" {
+		t.Errorf("expected algorithm RS256, got %s", alg)
+	}
+
+	err = VerifyPayloadPEM(payload, sig, alg, pubPEM)
+	if err != nil {
+		t.Errorf("VerifyPayloadPEM failed: %v", err)
+	}
+
+	// Test PKCS#1 RSA private key formatting
+	privBytesPKCS1 := x509.MarshalPKCS1PrivateKey(privateKey)
+	privPEMPKCS1 := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: privBytesPKCS1})
+	sig2, alg2, err := SignPayloadPEM(payload, privPEMPKCS1)
+	if err != nil {
+		t.Fatalf("SignPayloadPEM PKCS1 failed: %v", err)
+	}
+	err = VerifyPayloadPEM(payload, sig2, alg2, pubPEM)
+	if err != nil {
+		t.Errorf("VerifyPayloadPEM with PKCS1 signature failed: %v", err)
+	}
+}
+
+func TestPEMSigningAndVerification_Ed25519(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate Ed25519 key: %v", err)
+	}
+
+	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatalf("failed to marshal Ed25519 private key: %v", err)
+	}
+	privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+
+	pubBytes, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatalf("failed to marshal Ed25519 public key: %v", err)
+	}
+	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes})
+
+	payload := []byte("hello, audit logs with ed25519")
+
+	sig, alg, err := SignPayloadPEM(payload, privPEM)
+	if err != nil {
+		t.Fatalf("SignPayloadPEM failed: %v", err)
+	}
+	if alg != "EdDSA" {
+		t.Errorf("expected algorithm EdDSA, got %s", alg)
+	}
+
+	err = VerifyPayloadPEM(payload, sig, alg, pubPEM)
+	if err != nil {
+		t.Errorf("VerifyPayloadPEM failed: %v", err)
+	}
+}
+
+func TestClient_SignMessageBytes(t *testing.T) {
+	ctx := context.Background()
+	signerCalled := false
+	signer := func(ctx context.Context, payload []byte) (string, error) {
+		signerCalled = true
+		if string(payload) != "test-message" {
+			return "", fmt.Errorf("unexpected payload: %s", string(payload))
+		}
+		return "msg-signature", nil
+	}
+
+	client := NewClient(Config{
+		BaseURL:            "http://localhost:8080",
+		Signer:             signer,
+		SignatureAlgorithm: "RS256",
+	})
+	defer client.Close(ctx)
+
+	sig, err := client.SignMessageBytes(ctx, []byte("test-message"))
+	if err != nil {
+		t.Fatalf("SignMessageBytes failed: %v", err)
+	}
+	if sig != "msg-signature" {
+		t.Errorf("expected signature msg-signature, got %s", sig)
+	}
+	if !signerCalled {
+		t.Errorf("expected signer to be called")
+	}
+}
+

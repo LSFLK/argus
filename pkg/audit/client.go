@@ -235,6 +235,18 @@ func (c *Client) SignEvent(ctx context.Context, event *AuditLogRequest) error {
 	return nil
 }
 
+// SignMessageBytes signs arbitrary message bytes using the registered SignPayloadFunc
+func (c *Client) SignMessageBytes(ctx context.Context, message []byte) (string, error) {
+	if !c.enabled {
+		return "", fmt.Errorf("audit client is disabled")
+	}
+	if c.signer == nil {
+		return "", fmt.Errorf("no signer registered with the client")
+	}
+	return c.signer(ctx, message)
+}
+
+
 // Close gracefully shuts down the client, flushing the queue.
 // It signals workers to stop accepting new work, drains remaining events,
 // and waits for all workers to finish (or for ctx to expire).

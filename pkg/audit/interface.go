@@ -23,6 +23,9 @@ type Auditor interface {
 	// using the registered SignPayloadFunc
 	SignEvent(ctx context.Context, event *AuditLogRequest) error
 
+	// SignMessageBytes signs arbitrary message bytes using the registered SignPayloadFunc
+	SignMessageBytes(ctx context.Context, message []byte) (string, error)
+
 	// LogSignedEvent queues an event that already contains a cryptographic signature
 	LogSignedEvent(ctx context.Context, event *AuditLogRequest)
 
