@@ -14,7 +14,11 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	authToken := os.Getenv("ARGUS_AUTH_TOKEN")
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// No public endpoints - everything requires authentication
+		// Allow public access to health, metrics, and version endpoints
+		if r.URL.Path == "/health" || r.URL.Path == "/metrics" || r.URL.Path == "/version" {
+			next.ServeHTTP(w, r)
+			return
+		}
 
 		// Fail closed if no token is configured in the environment
 		if authToken == "" {

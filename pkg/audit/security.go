@@ -7,8 +7,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 )
@@ -132,4 +134,60 @@ func VerifyPayload(payload []byte, signatureBase64 string, alg string, publicKey
 	default:
 		return errors.New("unsupported public key type (only RSA and Ed25519 are supported)")
 	}
+}
+
+// SignPayloadPEM signs arbitrary bytes using a PEM-encoded RSA or Ed25519 private key.
+// It returns the base64-encoded signature, the signature algorithm ("RS256" or "EdDSA"), and any error.
+func SignPayloadPEM(payload []byte, privateKeyPEM []byte) (string, string, error) {
+	block, _ := pem.Decode(privateKeyPEM)
+	if block == nil {
+		return "", "", errors.New("failed to decode PEM block")
+	}
+
+	var key crypto.Signer
+	var err error
+
+	// Try parsing PKCS#8 first (standard Go key generation output)
+	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err == nil {
+		var ok bool
+		key, ok = parsedKey.(crypto.Signer)
+		if !ok {
+			return "", "", errors.New("parsed key does not implement crypto.Signer")
+		}
+	} else {
+		// Try parsing PKCS#1 (RSA specific)
+		rsaKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err == nil {
+			key = rsaKey
+		} else {
+			// Try EC private key (e.g. Ed25519 standard DER representation if formatted as PKCS8)
+			return "", "", fmt.Errorf("unsupported or malformed private key format: %w", err)
+		}
+	}
+
+	return SignPayload(payload, key)
+}
+
+// VerifyPayloadPEM verifies a base64-encoded signature of a payload using a PEM-encoded RSA or Ed25519 public key.
+func VerifyPayloadPEM(payload []byte, signatureBase64 string, algorithm string, publicKeyPEM []byte) error {
+	block, _ := pem.Decode(publicKeyPEM)
+	if block == nil {
+		return errors.New("failed to decode PEM block")
+	}
+
+	var key crypto.PublicKey
+	var err error
+
+	// Try standard PKIX parsing first
+	key, err = x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		// Try PKCS#1 (RSA public key specific)
+		key, err = x509.ParsePKCS1PublicKey(block.Bytes)
+		if err != nil {
+			return fmt.Errorf("failed to parse public key: %w", err)
+		}
+	}
+
+	return VerifyPayload(payload, signatureBase64, algorithm, key)
 }
