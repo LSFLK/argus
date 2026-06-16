@@ -10,8 +10,8 @@ import (
 
 // AuthMiddleware validates the Authorization header for a Bearer token
 func AuthMiddleware(next http.Handler) http.Handler {
-	// For production, we require a token. Fail-closed if missing.
-	authToken := os.Getenv("ARGUS_AUTH_TOKEN")
+	// For production, we require an API key. Fail-closed if missing.
+	apiKey := os.Getenv("ARGUS_API_KEY")
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Allow public access to health, metrics, and version endpoints
@@ -20,8 +20,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Fail closed if no token is configured in the environment
-		if authToken == "" {
+		// Fail closed if no API key is configured in the environment
+		if apiKey == "" {
 			http.Error(w, "Unauthorized: Server authentication is not configured", http.StatusUnauthorized)
 			return
 		}
@@ -39,7 +39,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Use constant-time comparison on hashes to prevent length-based timing attacks
-		expectedHash := sha256.Sum256([]byte(authToken))
+		expectedHash := sha256.Sum256([]byte(apiKey))
 		actualHash := sha256.Sum256([]byte(parts[1]))
 		if subtle.ConstantTimeCompare(actualHash[:], expectedHash[:]) != 1 {
 			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)

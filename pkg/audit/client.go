@@ -40,7 +40,7 @@ type Config struct {
 	BatchSize          int           // Number of logs to send in one batch, defaults to 20
 	BatchInterval      time.Duration // Max time to wait before sending a batch, defaults to 1s
 	HTTPTimeout        time.Duration // Defaults to 10s
-	AuthToken          string        // Bearer token for authentication
+	APIKey             string        // API key for authentication
 	SpoolDir           string        // Directory for spooling failed batches (empty = disabled)
 }
 
@@ -57,7 +57,7 @@ type Client struct {
 	wg                 sync.WaitGroup
 	batchSize          int
 	batchInterval      time.Duration
-	authToken          string
+	apiKey             string
 	spoolDir           string
 
 	// closed is an atomic flag to prevent sending on a closed queue.
@@ -150,7 +150,7 @@ func NewClient(cfg Config) *Client {
 		quit:               make(chan struct{}),
 		batchSize:          batchSize,
 		batchInterval:      batchInterval,
-		authToken:          cfg.AuthToken,
+		apiKey:             cfg.APIKey,
 		spoolDir:           cfg.SpoolDir,
 	}
 
@@ -425,8 +425,8 @@ func (c *Client) logBatch(parentCtx context.Context, events []*AuditLogRequest) 
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		if c.authToken != "" {
-			req.Header.Set("Authorization", "Bearer "+c.authToken)
+		if c.apiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		}
 
 		resp, err := c.httpClient.Do(req)
