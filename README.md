@@ -37,24 +37,26 @@ go get github.com/LSFLK/argus/pkg/audit
 ### Step 2: Initialize the hardened audit client
 ```go
 func main() {
-    client := audit.NewClient("http://argus:3001", 
-        audit.WithBatchSize(50), 
-        audit.WithBatchInterval(2 * time.Second),
-        audit.WithWorkerPool(5),
-    )
+    client := audit.NewClient(audit.Config{
+        BaseURL:       "http://argus:3001",
+        BatchSize:     50,
+        BatchInterval: 2 * time.Second,
+        WorkerCount:   5,
+    })
     audit.InitializeGlobalAudit(client)
 }
 ```
 
 ### Step 3: Log audit events
 ```go
+targetID := "resource-123"
 audit.LogAuditEvent(ctx, &audit.AuditLogRequest{
     EventType:  "USER_ACTION",
     Action:     "DELETE",
     Status:     "SUCCESS",
     ActorID:    "admin-user",
     TargetType: "RESOURCE",
-    TargetID:   "resource-123",
+    TargetID:   &targetID,
 })
 ```
 
@@ -76,11 +78,12 @@ Initialize the client in your main entry point. For high-scale systems, tune the
 ```go
 func main() {
     // Connect to the centralized Argus service deployed via GitOps
-    client := audit.NewClient("http://argus-service.nsw.svc.cluster.local:3001",
-        audit.WithBatchSize(100),
-        audit.WithBatchInterval(500 * time.Millisecond),
-        audit.WithWorkerPool(10),
-    )
+    client := audit.NewClient(audit.Config{
+        BaseURL:       "http://argus-service.nsw.svc.cluster.local:3001",
+        BatchSize:     100,
+        BatchInterval: 500 * time.Millisecond,
+        WorkerCount:   10,
+    })
     
     // Set as global auditor for the application
     audit.InitializeGlobalAudit(client)
@@ -93,11 +96,12 @@ To ensure logs cannot be spoofed, your application can sign requests using a pri
 ```go
 // Example: Signing a log in an NSW Submission handler
 func HandleSubmission(ctx context.Context, sub *Submission) {
+    msgBytes, _ := json.Marshal(map[string]interface{}{"submission_id": sub.ID})
     req := &audit.AuditLogRequest{
         EventType: "SUBMISSION",
         Action:    "CREATE",
         ActorID:   sub.UserID,
-        Message:   map[string]interface{}{"submission_id": sub.ID},
+        Message:   msgBytes,
     }
 
     // Attach signature using your service's private key
