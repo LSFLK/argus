@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.service.name | default "argus-service" }}
+  labels:
+    {{- include "argus.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 3001
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "argus.selectorLabels" . | nindent 4 }}
