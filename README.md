@@ -145,6 +145,19 @@ Argus exports standard Prometheus metrics at `/metrics`:
 - `argus_http_request_duration_seconds`: Latency of ingestion requests.
 - `argus_signature_verification_errors_total`: Count of invalid signature attempts.
 
+## Deployment & Helm Chart
+
+Argus includes an official Helm chart located at [`deployments/helm/argus`](deployments/helm/argus).
+
+```bash
+# Standalone Helm chart deployment:
+helm upgrade --install argus ./deployments/helm/argus \
+  -n nsw-infra-staging \
+  -f ./deployments/helm/argus/values.yaml
+```
+
+For full Helm configuration details and GitOps umbrella chart integration, see [deployments/helm/argus/README.md](deployments/helm/argus/README.md).
+
 ## Configuration
 
 | Variable | Default | Description |

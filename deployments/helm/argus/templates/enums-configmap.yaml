@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "argus.fullname" . }}-enums-config
+  labels:
+    {{- include "argus.labels" . | nindent 4 }}
+data:
+  enums.yaml: |
+    enums:
+      eventTypes:
+        - CONSIGNMENT_EVENT
+        - TASK_EVENT
+        - STORAGE_EVENT
+        - PAYMENT_EVENT
+        - USER_MANAGEMENT
+      eventActions:
+        - CREATE
+        - READ
+        - UPDATE
+        - DELETE
+      actorTypes:
+        - ADMIN
+        - MEMBER
+        - SERVICE
+        - SYSTEM
+      targetTypes:
+        - CONSIGNMENT
+        - TASK
+        - STORAGE_OBJECT
+        - PAYMENT
