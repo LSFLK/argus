@@ -1,0 +1,59 @@
+# Example override values for the Argus Helm chart.
+#   helm install argus ./deployments/helm/argus -f ./deployments/helm/values-example.yaml
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/opennsw/argus
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3001
+  name: argus-service
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+securityContext:
+  runAsUser: 10001
+  runAsNonRoot: true
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+env:
+  ENVIRONMENT: production
+  DB_TYPE: postgres
+  DB_HOST: nsw-db
+  DB_PORT: 5432
+  DB_NAME: audit_db
+  DB_SSLMODE: disable
+  REQUIRE_SIGNATURES: "true"
+  AUDIT_ENUMS_CONFIG: "/app/configs/enums.yaml"
+  
+  # AWS S3 Compliance Settings (Object Lock)
+  S3_COMPLIANCE_BUCKET: "nsw-audit-compliance-logs-staging"
+  S3_REGION: "us-east-1"
+  S3_PREFIX: "audit-logs"
+  S3_RETENTION_DAYS: "2555"
+  S3_OBJECT_LOCK_MODE: "COMPLIANCE"
+  S3_USE_PATH_STYLE: "false"
+  S3_ENDPOINT: ""
+
+auth:
+  username: "postgres"
+  password: "example-db-password"
+  existingSecret: ""
+  externalSecrets:
+    enabled: false
+    secretStoreName: "nsw-vault-backend"
+    secretStoreKind: "ClusterSecretStore"
+    refreshInterval: "1h"
+    remoteDbKey: "nsw/staging/db"
+    remoteAwsKey: "nsw/staging/aws"

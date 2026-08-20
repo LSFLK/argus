@@ -4,3 +4,10 @@ description: Secure, Tamper-Proof cryptographic Audit Log Service
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
+home: https://github.com/LSFLK/argus
+sources:
+  - https://github.com/LSFLK/argus
+annotations:
+  org.opencontainers.image.source: https://github.com/LSFLK/argus
+  org.opencontainers.image.description: Secure, Tamper-Proof cryptographic Audit Log Service Helm Chart
+  org.opencontainers.image.licenses: Apache-2.0

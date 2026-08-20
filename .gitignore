@@ -40,3 +40,7 @@ coverage.html
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Helm packages
+*.tgz
+.cr-release-packages/
