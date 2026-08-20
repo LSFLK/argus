@@ -5,7 +5,7 @@ This Helm chart deploys **Argus**, the secure cryptographic Audit Logging servic
 ## Prerequisites
 
 - Kubernetes 1.20+
-- Helm 3.0+
+- Helm 3.8.0+ (with native OCI support)
 - (Optional) External Secrets Operator (ESO) & HashiCorp Vault integration for managing secrets.
 
 ## Chart Details
@@ -16,11 +16,32 @@ This chart provisions:
 - Audit enums **ConfigMap** (`enums.yaml`)
 - Credentials **Secret** (or **ExternalSecret** when ESO is enabled)
 
+---
+
 ## Installation & Deployment
 
-### Standalone Deployment
+### 1. Install via OCI Artifact (Recommended)
 
-To deploy Argus independently:
+Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`).
+
+```bash
+# Install directly from OCI registry
+helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
+  --version 0.1.0 \
+  --namespace nsw-infra-staging \
+  --create-namespace \
+  --values ./custom-values.yaml
+```
+
+To pull the packaged chart locally:
+
+```bash
+helm pull oci://ghcr.io/lsflk/charts/argus --version 0.1.0
+```
+
+### 2. Standalone Deployment from Source
+
+To deploy Argus from the local repository directory:
 
 ```bash
 helm upgrade --install argus ./deployments/helm/argus \
@@ -29,9 +50,18 @@ helm upgrade --install argus ./deployments/helm/argus \
   --values ./deployments/helm/argus/values.yaml
 ```
 
-### Parent Chart (GitOps Umbrella) Integration
+### 3. Parent Chart (GitOps Umbrella) Integration
 
-When deployed via `nsw-gitops` under `infra-umbrella`, toggle the Argus component in your environment values file (e.g., `envs/staging/infra-values.yaml`):
+When referencing Argus as a dependency in your umbrella chart (`Chart.yaml`):
+
+```yaml
+dependencies:
+  - name: argus
+    version: "0.1.0"
+    repository: "oci://ghcr.io/lsflk/charts"
+```
+
+In your environment values file (e.g., `envs/staging/infra-values.yaml`):
 
 ```yaml
 argus:
@@ -43,6 +73,33 @@ argus:
     DB_NAME: "nsw_staging"
     S3_COMPLIANCE_BUCKET: "nsw-audit-compliance-logs-staging"
 ```
+
+---
+
+## Publishing to OCI Registry
+
+### Automated (CI/CD)
+
+The Helm chart automation mirrors the `nsw-srilanka` and `nsw-agency` setup:
+- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`.
+- **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
+
+### Manual Packaging and Push
+
+To manually package and push to OCI registry:
+
+```bash
+# 1. Package the chart
+helm package deployments/helm/argus -d .cr-release-packages/
+
+# 2. Login to GHCR (requires PAT with write:packages)
+echo "$CR_PAT" | helm registry login ghcr.io -u <username> --password-stdin
+
+# 3. Push OCI artifact
+helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
+```
+
+---
 
 ## Configuration Parameters
 

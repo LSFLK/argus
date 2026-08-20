@@ -1,0 +1,23 @@
+# Patterns to ignore when packaging a Helm chart.
+# See https://helm.sh/docs/chart_template_guide/helm_ignore_file/
+.DS_Store
+# Common VCS dirs
+.git/
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+# Common backup files
+*.bak
+*.swp
+*.orig
+*~
+# Various IDEs
+.project
+.idea/
+.vscode/
+# Helm packaging artifacts
+*.tgz
+.cr-release-packages/
