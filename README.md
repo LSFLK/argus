@@ -79,7 +79,7 @@ Initialize the client in your main entry point. For high-scale systems, tune the
 func main() {
     // Connect to the centralized Argus service deployed via GitOps
     client := audit.NewClient(audit.Config{
-        BaseURL:       "http://argus-service.your-namespace.svc.cluster.local:3001",
+        BaseURL:       "http://argus-service.<your-namespace>.svc.cluster.local:3001",
         BatchSize:     100,
         BatchInterval: 500 * time.Millisecond,
         WorkerCount:   10,
@@ -153,7 +153,7 @@ Argus provides an official Helm chart published as an **OCI Artifact** to GitHub
 ```bash
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
   --version 0.1.0 \
-  -n argus \
+  -n <your-namespace> \
   --create-namespace \
   -f custom-values.yaml
 ```
@@ -161,7 +161,7 @@ helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
 ### Standalone Deployment from Source
 ```bash
 helm upgrade --install argus ./deployments/helm/argus \
-  -n argus \
+  -n <your-namespace> \
   --create-namespace \
   -f ./deployments/helm/argus/values.yaml
 ```
