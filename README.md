@@ -153,7 +153,7 @@ Argus provides an official Helm chart published as an **OCI Artifact** to GitHub
 ```bash
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
   --version 0.1.0 \
-  -n infra-staging \
+  -n argus \
   --create-namespace \
   -f custom-values.yaml
 ```
@@ -161,7 +161,7 @@ helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
 ### Standalone Deployment from Source
 ```bash
 helm upgrade --install argus ./deployments/helm/argus \
-  -n infra-staging \
+  -n argus \
   --create-namespace \
   -f ./deployments/helm/argus/values.yaml
 ```

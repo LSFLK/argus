@@ -28,7 +28,7 @@ Argus Helm charts are published as OCI artifacts to the GitHub Container Registr
 # Install directly from OCI registry
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
   --version 0.1.0 \
-  --namespace infra-staging \
+  --namespace argus \
   --create-namespace \
   --values ./custom-values.yaml
 ```
@@ -45,7 +45,7 @@ To deploy Argus from the local repository directory:
 
 ```bash
 helm upgrade --install argus ./deployments/helm/argus \
-  --namespace infra-staging \
+  --namespace argus \
   --create-namespace \
   --values ./deployments/helm/argus/values.yaml
 ```
