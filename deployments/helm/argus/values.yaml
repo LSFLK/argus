@@ -3,7 +3,7 @@
 replicaCount: 2
 
 image:
-  repository: ghcr.io/opennsw/argus
+  repository: ghcr.io/lsflk/argus
   tag: f21da85558410c19b6a96275b6e0eef2a788fb4b
   pullPolicy: IfNotPresent
 
@@ -30,15 +30,15 @@ securityContext:
 env:
   ENVIRONMENT: production
   DB_TYPE: postgres
-  DB_HOST: nsw-db
+  DB_HOST: audit-db
   DB_PORT: 5432
   DB_NAME: audit_db
   DB_SSLMODE: disable
   REQUIRE_SIGNATURES: "true"
   AUDIT_ENUMS_CONFIG: "/app/configs/enums.yaml"
-  
+
   # AWS S3 Compliance Settings (Object Lock)
-  S3_COMPLIANCE_BUCKET: "nsw-audit-compliance-logs-staging"
+  S3_COMPLIANCE_BUCKET: "audit-compliance-logs-staging"
   S3_REGION: "us-east-1"
   S3_PREFIX: "audit-logs"
   S3_RETENTION_DAYS: "2555"
@@ -56,10 +56,10 @@ auth:
   # Enables Vault integration for injecting secrets securely
   externalSecrets:
     enabled: false
-    secretStoreName: "nsw-vault-backend"
+    secretStoreName: "vault-backend"
     secretStoreKind: "ClusterSecretStore"
     refreshInterval: "1h"
     # Vault key containing DB credentials
-    remoteDbKey: "nsw/staging/db"
+    remoteDbKey: "argus/staging/db"
     # Vault key containing AWS S3 access/secret keys
-    remoteAwsKey: "nsw/staging/aws"
+    remoteAwsKey: "argus/staging/aws"

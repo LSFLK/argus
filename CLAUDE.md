@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Argus is a Go microservice for centralized, tamper-evident audit logging. It exposes a REST API and a
 reusable client library (`pkg/audit`) that other Go services import to emit audit events. It's designed
-to be the audit source of truth for the OpenNSW microservice platform.
+to be the audit source of truth for any microservice platform.
 
 ## Commands
 
