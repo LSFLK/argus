@@ -28,7 +28,7 @@ Argus Helm charts are published as OCI artifacts to the GitHub Container Registr
 # Install directly from OCI registry
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
   --version 0.1.0 \
-  --namespace nsw-infra-staging \
+  --namespace <your-namespace> \
   --create-namespace \
   --values ./custom-values.yaml
 ```
@@ -45,7 +45,7 @@ To deploy Argus from the local repository directory:
 
 ```bash
 helm upgrade --install argus ./deployments/helm/argus \
-  --namespace nsw-infra-staging \
+  --namespace <your-namespace> \
   --create-namespace \
   --values ./deployments/helm/argus/values.yaml
 ```
@@ -67,11 +67,11 @@ In your environment values file (e.g., `envs/staging/infra-values.yaml`):
 argus:
   enabled: true
   auth:
-    existingSecret: "nsw-db-credentials"
+    existingSecret: "argus-db-credentials"
   env:
-    DB_HOST: "staging-nsw-db"
-    DB_NAME: "nsw_staging"
-    S3_COMPLIANCE_BUCKET: "nsw-audit-compliance-logs-staging"
+    DB_HOST: "staging-db"
+    DB_NAME: "argus_staging"
+    S3_COMPLIANCE_BUCKET: "audit-compliance-logs-staging"
 ```
 
 ---
@@ -80,7 +80,7 @@ argus:
 
 ### Automated (CI/CD)
 
-The Helm chart automation mirrors the `nsw-srilanka` and `nsw-agency` setup:
+The Helm chart automation follows a standard GitOps setup:
 - **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`.
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
@@ -106,16 +106,16 @@ helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
 | Parameter | Description | Default |
 | --- | --- | --- |
 | `replicaCount` | Number of pod replicas | `2` |
-| `image.repository` | Container image repository | `ghcr.io/opennsw/argus` |
+| `image.repository` | Container image repository | `ghcr.io/lsflk/argus` |
 | `image.tag` | Container image tag | `f21da85558410c19b6a96275b6e0eef2a788fb4b` |
 | `service.type` | Kubernetes service type | `ClusterIP` |
 | `service.port` | Service port | `3001` |
 | `env.ENVIRONMENT` | Deployment environment | `production` |
 | `env.DB_TYPE` | Database driver (`postgres` or `sqlite`) | `postgres` |
-| `env.DB_HOST` | Database host | `nsw-db` |
+| `env.DB_HOST` | Database host | `audit-db` |
 | `env.DB_PORT` | Database port | `5432` |
 | `env.DB_NAME` | Database name | `audit_db` |
 | `env.REQUIRE_SIGNATURES` | Enable signature verification | `"true"` |
-| `env.S3_COMPLIANCE_BUCKET` | S3 WORM compliance bucket name | `"nsw-audit-compliance-logs-staging"` |
+| `env.S3_COMPLIANCE_BUCKET` | S3 WORM compliance bucket name | `"audit-compliance-logs-staging"` |
 | `auth.existingSecret` | Existing Kubernetes secret containing `DB_PASSWORD` | `""` |
 | `auth.externalSecrets.enabled` | Enable ExternalSecrets Operator (ESO) | `false` |

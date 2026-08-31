@@ -22,7 +22,7 @@ type AuditLogRequest struct {
 	TargetID   *string `json:"targetId,omitempty"` // resource_id or service_name
 
 	// Payload & Metadata
-	Message  []byte                 `json:"message"`            // Specific blob for NSW/NPQS
+	Message  []byte                 `json:"message"`            // Raw payload bytes (e.g. serialized request/response body)
 	Metadata map[string]interface{} `json:"metadata,omitempty"` // Consolidated metadata
 
 	// Security & Non-Repudiation

@@ -59,7 +59,7 @@ curl -X POST http://localhost:3001/api/audit-logs \
     "metadata": {"schemaId": "schema-123", "decision": "ALLOWED"},
     "signature": "base64-encoded-signature",
     "signatureAlgorithm": "RS256",
-    "publicKeyId": "nsw-key-1"
+    "publicKeyId": "my-key-1"
   }'
 ```
 

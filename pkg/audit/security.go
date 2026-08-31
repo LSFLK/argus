@@ -27,7 +27,7 @@ type SignPayloadFunc func(ctx context.Context, payload []byte) (signature string
 // json.Marshal output is Go-specific (spacing, key ordering of maps, encoding of
 // special characters) and is extremely difficult to reproduce byte-for-byte in other
 // languages like Python or Node.js. By using a simple pipe-delimited format, any
-// language in NSW's polyglot ecosystem can trivially compute the same canonical payload.
+// language in a polyglot microservice ecosystem can trivially compute the same canonical payload.
 //
 // Canonical format (fields separated by "|"):
 //

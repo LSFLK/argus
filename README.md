@@ -62,12 +62,12 @@ audit.LogAuditEvent(ctx, &audit.AuditLogRequest{
 
 ---
 
-## Integration with External Applications (e.g., OpenNSW)
+## Integration with External Applications
 
-Argus is designed to be the centralized audit source of truth for microservice platforms like [OpenNSW](https://github.com/OpenNSW/nsw/). By integrating the Argus client, your application gains high-performance, tamper-evident logging with zero impact on core performance.
+Argus is designed to be the centralized audit source of truth for any microservice platform. By integrating the Argus client, your application gains high-performance, tamper-evident logging with zero impact on core performance.
 
 ### 1. Installation
-In your application (e.g., `nsw-api` or `nsw-backend`):
+In your application:
 ```bash
 go get github.com/LSFLK/argus/pkg/audit
 ```
@@ -79,7 +79,7 @@ Initialize the client in your main entry point. For high-scale systems, tune the
 func main() {
     // Connect to the centralized Argus service deployed via GitOps
     client := audit.NewClient(audit.Config{
-        BaseURL:       "http://argus-service.nsw.svc.cluster.local:3001",
+        BaseURL:       "http://argus-service.<your-namespace>.svc.cluster.local:3001",
         BatchSize:     100,
         BatchInterval: 500 * time.Millisecond,
         WorkerCount:   10,
@@ -94,7 +94,7 @@ func main() {
 To ensure logs cannot be spoofed, your application can sign requests using a private key. Argus will verify these on the server-side.
 
 ```go
-// Example: Signing a log in an NSW Submission handler
+// Example: Signing a log in a request handler
 func HandleSubmission(ctx context.Context, sub *Submission) {
     msgBytes, _ := json.Marshal(map[string]interface{}{"submission_id": sub.ID})
     req := &audit.AuditLogRequest{
@@ -106,16 +106,16 @@ func HandleSubmission(ctx context.Context, sub *Submission) {
 
     // Attach signature using your service's private key
     // req.Signature = sign(req, myPrivateKey) 
-    // req.PublicKeyID = "nsw-api-prod-01"
+    // req.PublicKeyID = "my-service-prod-01"
 
     audit.LogAuditEvent(ctx, req)
 }
 ```
 
-### 4. Benefits for National-Scale Platforms
-- **Centralized Compliance:** Single point of audit for multiple agencies and microservices (e.g., FCAU, IRD, NPQS).
+### 4. Benefits for Large-Scale Platforms
+- **Centralized Compliance:** Single point of audit for multiple teams, agencies, or microservices.
 - **WORM Storage Ready:** Using the Pipeline architecture, you can route logs to S3 Object Lock or physical WORM drives for regulatory compliance.
-- **Traceability:** Propagate `trace_id` from Argus into your downstream logs for end-to-end observability across Temporal workflows and APIs.
+- **Traceability:** Propagate `trace_id` from Argus into your downstream logs for end-to-end observability across distributed workflows and APIs.
 
 ---
 
@@ -153,7 +153,7 @@ Argus provides an official Helm chart published as an **OCI Artifact** to GitHub
 ```bash
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
   --version 0.1.0 \
-  -n nsw-infra-staging \
+  -n <your-namespace> \
   --create-namespace \
   -f custom-values.yaml
 ```
@@ -161,7 +161,7 @@ helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
 ### Standalone Deployment from Source
 ```bash
 helm upgrade --install argus ./deployments/helm/argus \
-  -n nsw-infra-staging \
+  -n <your-namespace> \
   --create-namespace \
   -f ./deployments/helm/argus/values.yaml
 ```
