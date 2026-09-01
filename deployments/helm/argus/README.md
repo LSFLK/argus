@@ -22,12 +22,12 @@ This chart provisions:
 
 ### 1. Install via OCI Artifact (Recommended)
 
-Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`).
+Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). Chart `0.1.1` defaults to the application image `ghcr.io/lsflk/argus:latest` (the same image is also tagged with the git SHA). Do not use chart `0.1.0` — it pointed at an unpublished `ghcr.io/opennsw/argus` image.
 
 ```bash
 # Install directly from OCI registry
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
-  --version 0.1.0 \
+  --version 0.1.1 \
   --namespace <your-namespace> \
   --create-namespace \
   --values ./custom-values.yaml
@@ -36,7 +36,7 @@ helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
 To pull the packaged chart locally:
 
 ```bash
-helm pull oci://ghcr.io/lsflk/charts/argus --version 0.1.0
+helm pull oci://ghcr.io/lsflk/charts/argus --version 0.1.1
 ```
 
 ### 2. Standalone Deployment from Source
@@ -57,7 +57,7 @@ When referencing Argus as a dependency in your umbrella chart (`Chart.yaml`):
 ```yaml
 dependencies:
   - name: argus
-    version: "0.1.0"
+    version: "0.1.1"
     repository: "oci://ghcr.io/lsflk/charts"
 ```
 
@@ -81,6 +81,7 @@ argus:
 ### Automated (CI/CD)
 
 The Helm chart automation follows a standard GitOps setup:
+- **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest` on `main`). After a successful image push, also publishes the stable chart version from `Chart.yaml` (currently `0.1.1`) to `oci://ghcr.io/lsflk/charts`.
 - **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`.
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
@@ -96,7 +97,7 @@ helm package deployments/helm/argus -d .cr-release-packages/
 echo "$CR_PAT" | helm registry login ghcr.io -u <username> --password-stdin
 
 # 3. Push OCI artifact
-helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
+helm push .cr-release-packages/argus-0.1.1.tgz oci://ghcr.io/lsflk/charts
 ```
 
 ---
@@ -107,7 +108,7 @@ helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
 | --- | --- | --- |
 | `replicaCount` | Number of pod replicas | `2` |
 | `image.repository` | Container image repository | `ghcr.io/lsflk/argus` |
-| `image.tag` | Container image tag | `f21da85558410c19b6a96275b6e0eef2a788fb4b` |
+| `image.tag` | Container image tag (`:<git sha>` also published) | `latest` |
 | `service.type` | Kubernetes service type | `ClusterIP` |
 | `service.port` | Service port | `3001` |
 | `env.ENVIRONMENT` | Deployment environment | `production` |

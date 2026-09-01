@@ -18,7 +18,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ include "argus.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: DB_PASSWORD

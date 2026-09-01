@@ -147,12 +147,12 @@ Argus exports standard Prometheus metrics at `/metrics`:
 
 ## Deployment & Helm Chart
 
-Argus provides an official Helm chart published as an **OCI Artifact** to GitHub Container Registry (`ghcr.io/lsflk/charts/argus`), as well as local chart source at [`deployments/helm/argus`](deployments/helm/argus).
+Argus provides an official Helm chart published as an **OCI Artifact** to GitHub Container Registry (`ghcr.io/lsflk/charts/argus`), as well as local chart source at [`deployments/helm/argus`](deployments/helm/argus). The application container image is published to `ghcr.io/lsflk/argus` (`:latest` and `:<git sha>`).
 
 ### Install via OCI Artifact (Recommended)
 ```bash
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
-  --version 0.1.0 \
+  --version 0.1.1 \
   -n <your-namespace> \
   --create-namespace \
   -f custom-values.yaml
