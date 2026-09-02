@@ -52,6 +52,8 @@ auth:
   username: "postgres"
   # Set plain password here if externalSecrets are disabled and existingSecret is empty
   password: ""
+  # Static API key injected as ARGUS_API_KEY. auth.token is still read as a fallback.
+  apiKey: ""
   existingSecret: ""
 
   # --- External Secrets Operator (ESO) ---

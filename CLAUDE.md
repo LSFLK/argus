@@ -96,7 +96,7 @@ route registration, graceful shutdown) — business logic does not belong there.
   changes to `CanonicalizeRequest` are a breaking/security-relevant change and must be mirrored in
   `pkg/audit/security.go`.
 - Auth middleware (`internal/middleware/auth.go`) uses `crypto/subtle.ConstantTimeCompare` over a
-  SHA-256 pre-hash of the bearer token specifically to avoid length-based timing side channels — don't
+  SHA-256 pre-hash of the API key specifically to avoid length-based timing side channels — don't
   replace this with a plain `==` comparison.
 
 ### Database

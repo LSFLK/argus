@@ -35,7 +35,7 @@ func DefaultCORSConfig() CORSConfig {
 			"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
 		},
 		AllowedHeaders: []string{
-			"Origin", "Content-Type", "Accept", "Authorization",
+			"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key",
 			"X-Requested-With", "X-CSRF-Token", "X-Request-ID",
 		},
 		ExposedHeaders: []string{

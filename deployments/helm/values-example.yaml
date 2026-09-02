@@ -50,6 +50,7 @@ env:
 auth:
   username: "postgres"
   password: "example-db-password"
+  apiKey: "example-api-key"
   existingSecret: ""
   externalSecrets:
     enabled: false

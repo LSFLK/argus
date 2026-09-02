@@ -119,5 +119,6 @@ helm push .cr-release-packages/argus-0.1.1.tgz oci://ghcr.io/lsflk/charts
 | `env.DB_NAME` | Database name | `audit_db` |
 | `env.REQUIRE_SIGNATURES` | Enable signature verification | `"true"` |
 | `env.S3_COMPLIANCE_BUCKET` | S3 WORM compliance bucket name | `"audit-compliance-logs-staging"` |
-| `auth.existingSecret` | Existing Kubernetes secret containing `DB_PASSWORD` | `""` |
+| `auth.existingSecret` | Existing Kubernetes secret containing `password` and `api-key` | `""` |
+| `auth.apiKey` | API key for authentication (`ARGUS_API_KEY`) | `""` |
 | `auth.externalSecrets.enabled` | Enable ExternalSecrets Operator (ESO) | `false` |

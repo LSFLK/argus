@@ -25,7 +25,7 @@
 - **Cryptographic Non-Repudiation** – Server-side verification of RSA/Ed25519 signatures for incoming logs. The `computeHash` covers the entire payload (including all metadata and message bodies) to guarantee full payload integrity.
 - **High-Performance Batching** – Client-side worker pool with buffered batching to minimize HTTP overhead and eliminate goroutine leaks. The server utilizes GORM's `CreateInBatches` for high-throughput ingestion.
 - **Production Observability** – Built-in Prometheus metrics for ingestion rates, latencies, and security errors.
-- **Secure by Default** – Fail-closed Bearer token authentication utilizing `crypto/subtle.ConstantTimeCompare` with SHA-256 pre-hashing to prevent length-based timing attacks. Strict validation of log schemas.
+- **Secure by Default** – Fail-closed API key authentication utilizing `crypto/subtle.ConstantTimeCompare` with SHA-256 pre-hashing to prevent length-based timing attacks. Strict validation of log schemas.
 
 ## Quick Start: Using the Audit Interface
 
@@ -172,7 +172,7 @@ For full Helm configuration parameters, GitOps umbrella chart integration, and O
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ARGUS_AUTH_TOKEN` | - | Bearer token required for API access. |
+| `ARGUS_API_KEY` | - | API key required for write operations (`X-API-Key` or `Authorization: Bearer <key>`). |
 | `DB_TYPE` | `sqlite` | `sqlite` or `postgres`. |
 | `AUDIT_ENUMS_CONFIG` | `configs/enums.yaml` | Path to allowed event types/actions. |
 

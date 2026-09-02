@@ -7,6 +7,16 @@ Complete API reference for integrating Argus into your microservices architectur
 - **Development**: `http://localhost:3001`
 - **Production**: `https://argus.yourdomain.com` or `http://argus-service:3001` (internal)
 
+## Authentication
+
+Write and read API endpoints require a static API key (`ARGUS_API_KEY`). Send it as `X-API-Key`, or as `Authorization: Bearer <key>` for compatibility. `/health`, `/metrics`, and `/version` are unauthenticated.
+
+```bash
+curl -H "X-API-Key: <your-api-key>" ...
+# or
+curl -H "Authorization: Bearer <your-api-key>" ...
+```
+
 ## Endpoints Overview
 
 | Method | Endpoint          | Description                        |
@@ -46,6 +56,7 @@ Complete API reference for integrating Argus into your microservices architectur
 ```bash
 curl -X POST http://localhost:3001/api/audit-logs \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: <your-api-key>" \
   -d '{
     "traceId": "550e8400-e29b-41d4-a716-446655440000",
     "timestamp": "2024-01-20T10:00:00Z",
@@ -111,16 +122,16 @@ curl -X POST http://localhost:3001/api/audit-logs \
 
 ```bash
 # Get all audit logs (paginated)
-curl http://localhost:3001/api/audit-logs
+curl -H "X-API-Key: <your-api-key>" http://localhost:3001/api/audit-logs
 
 # Filter by trace ID
-curl http://localhost:3001/api/audit-logs?traceId=550e8400-e29b-41d4-a716-446655440000
+curl -H "X-API-Key: <your-api-key>" http://localhost:3001/api/audit-logs?traceId=550e8400-e29b-41d4-a716-446655440000
 
 # Filter by event type
-curl http://localhost:3001/api/audit-logs?eventType=MANAGEMENT_EVENT
+curl -H "X-API-Key: <your-api-key>" http://localhost:3001/api/audit-logs?eventType=MANAGEMENT_EVENT
 
 # Multiple filters with pagination
-curl http://localhost:3001/api/audit-logs?eventType=MANAGEMENT_EVENT&status=SUCCESS&limit=20&offset=0
+curl -H "X-API-Key: <your-api-key>" "http://localhost:3001/api/audit-logs?eventType=MANAGEMENT_EVENT&status=SUCCESS&limit=20&offset=0"
 ```
 
 **Success Response: 200 OK**

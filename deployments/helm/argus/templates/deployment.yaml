@@ -38,11 +38,11 @@ spec:
                   name: {{ .Values.auth.existingSecret | default (printf "%s-credentials" (include "argus.fullname" .)) }}
                   key: AWS_SECRET_ACCESS_KEY
                   optional: true
-            - name: ARGUS_AUTH_TOKEN
+            - name: ARGUS_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.existingSecret | default (printf "%s-credentials" (include "argus.fullname" .)) }}
-                  key: ARGUS_AUTH_TOKEN
+                  key: {{ if .Values.auth.existingSecret }}api-key{{ else }}ARGUS_API_KEY{{ end }}
                   optional: true
             {{- range $key, $val := .Values.env }}
             - name: {{ $key }}
