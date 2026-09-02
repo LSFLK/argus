@@ -25,7 +25,7 @@
 - **Cryptographic Non-Repudiation** – Server-side verification of RSA/Ed25519 signatures for incoming logs. The `computeHash` covers the entire payload (including all metadata and message bodies) to guarantee full payload integrity.
 - **High-Performance Batching** – Client-side worker pool with buffered batching to minimize HTTP overhead and eliminate goroutine leaks. The server utilizes GORM's `CreateInBatches` for high-throughput ingestion.
 - **Production Observability** – Built-in Prometheus metrics for ingestion rates, latencies, and security errors.
-- **Secure by Default** – Fail-closed Bearer token authentication utilizing `crypto/subtle.ConstantTimeCompare` with SHA-256 pre-hashing to prevent length-based timing attacks. Strict validation of log schemas.
+- **Secure by Default** – Fail-closed API key authentication utilizing `crypto/subtle.ConstantTimeCompare` with SHA-256 pre-hashing to prevent length-based timing attacks. Strict validation of log schemas.
 
 ## Quick Start: Using the Audit Interface
 
@@ -147,12 +147,12 @@ Argus exports standard Prometheus metrics at `/metrics`:
 
 ## Deployment & Helm Chart
 
-Argus provides an official Helm chart published as an **OCI Artifact** to GitHub Container Registry (`ghcr.io/lsflk/charts/argus`), as well as local chart source at [`deployments/helm/argus`](deployments/helm/argus).
+Argus provides an official Helm chart published as an **OCI Artifact** to GitHub Container Registry (`ghcr.io/lsflk/charts/argus`), as well as local chart source at [`deployments/helm/argus`](deployments/helm/argus). The application container image is published to `ghcr.io/lsflk/argus` (`:latest` and `:<git sha>`).
 
 ### Install via OCI Artifact (Recommended)
 ```bash
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
-  --version 0.1.0 \
+  --version 0.1.1 \
   -n <your-namespace> \
   --create-namespace \
   -f custom-values.yaml
@@ -172,7 +172,7 @@ For full Helm configuration parameters, GitOps umbrella chart integration, and O
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ARGUS_AUTH_TOKEN` | - | Bearer token required for API access. |
+| `ARGUS_API_KEY` | - | API key required for write operations (`X-API-Key`). |
 | `DB_TYPE` | `sqlite` | `sqlite` or `postgres`. |
 | `AUDIT_ENUMS_CONFIG` | `configs/enums.yaml` | Path to allowed event types/actions. |
 

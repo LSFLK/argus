@@ -13,6 +13,7 @@ services:
       - DB_NAME=audit_db
       - DB_SSLMODE=disable
       - PORT=3001
+      - ARGUS_API_KEY=dev-api-key
     depends_on:
       - postgres
     restart: unless-stopped

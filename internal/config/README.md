@@ -78,7 +78,7 @@ In addition to the `enums.yaml` file, Argus relies on several environment variab
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `ARGUS_AUTH_TOKEN` | **Yes** | - | A high-entropy Bearer token required for all API write operations. Argus fails closed if this is missing. |
+| `ARGUS_API_KEY` | **Yes** | - | A high-entropy API key required for all API write operations (`X-API-Key`). Argus fails closed if this is missing. `ARGUS_AUTH_TOKEN` is still accepted as an env fallback. |
 | `ENVIRONMENT` | No | `development` | Setting to `production` enables stricter logging and security defaults. |
 | `DB_TYPE` | No | `sqlite` | Database engine to use (`sqlite` or `postgres`). |
 | `AUDIT_ENUMS_CONFIG` | No | `configs/enums.yaml` | Override path for the Event Type configuration file. |

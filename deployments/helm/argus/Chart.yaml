@@ -2,7 +2,7 @@ apiVersion: v2
 name: argus
 description: Secure, Tamper-Proof cryptographic Audit Log Service
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "1.0.0"
 home: https://github.com/LSFLK/argus
 sources:

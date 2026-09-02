@@ -5,13 +5,16 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"os"
-	"strings"
 )
 
-// AuthMiddleware validates the Authorization header for a Bearer token
+// AuthMiddleware validates a static API key on write endpoints.
+// The key is read from ARGUS_API_KEY, with ARGUS_AUTH_TOKEN as a fallback
+// for older Helm/env deployments. Clients must send X-API-Key.
 func AuthMiddleware(next http.Handler) http.Handler {
-	// For production, we require an API key. Fail-closed if missing.
 	apiKey := os.Getenv("ARGUS_API_KEY")
+	if apiKey == "" {
+		apiKey = os.Getenv("ARGUS_AUTH_TOKEN")
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Allow public access to health, metrics, and version endpoints
@@ -26,23 +29,17 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Unauthorized: Missing Authorization header", http.StatusUnauthorized)
-			return
-		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			http.Error(w, "Unauthorized: Invalid Authorization header format", http.StatusUnauthorized)
+		presented := r.Header.Get("X-API-Key")
+		if presented == "" {
+			http.Error(w, "Unauthorized: Missing API key", http.StatusUnauthorized)
 			return
 		}
 
 		// Use constant-time comparison on hashes to prevent length-based timing attacks
 		expectedHash := sha256.Sum256([]byte(apiKey))
-		actualHash := sha256.Sum256([]byte(parts[1]))
+		actualHash := sha256.Sum256([]byte(presented))
 		if subtle.ConstantTimeCompare(actualHash[:], expectedHash[:]) != 1 {
-			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
+			http.Error(w, "Unauthorized: Invalid API key", http.StatusUnauthorized)
 			return
 		}
 

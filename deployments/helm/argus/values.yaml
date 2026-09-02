@@ -4,7 +4,9 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/lsflk/argus
-  tag: f21da85558410c19b6a96275b6e0eef2a788fb4b
+  # :latest is mutable; the chart uses pullPolicy Always for this tag.
+  # Pin a git SHA (and IfNotPresent) in production.
+  tag: latest
   pullPolicy: IfNotPresent
 
 service:
@@ -50,6 +52,8 @@ auth:
   username: "postgres"
   # Set plain password here if externalSecrets are disabled and existingSecret is empty
   password: ""
+  # Static API key injected as ARGUS_API_KEY. auth.token is still read as a fallback.
+  apiKey: ""
   existingSecret: ""
 
   # --- External Secrets Operator (ESO) ---

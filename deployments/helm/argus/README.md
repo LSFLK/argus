@@ -22,12 +22,12 @@ This chart provisions:
 
 ### 1. Install via OCI Artifact (Recommended)
 
-Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`).
+Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). 
 
 ```bash
 # Install directly from OCI registry
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
-  --version 0.1.0 \
+  --version 0.1.1 \
   --namespace <your-namespace> \
   --create-namespace \
   --values ./custom-values.yaml
@@ -36,7 +36,7 @@ helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
 To pull the packaged chart locally:
 
 ```bash
-helm pull oci://ghcr.io/lsflk/charts/argus --version 0.1.0
+helm pull oci://ghcr.io/lsflk/charts/argus --version 0.1.1
 ```
 
 ### 2. Standalone Deployment from Source
@@ -57,7 +57,7 @@ When referencing Argus as a dependency in your umbrella chart (`Chart.yaml`):
 ```yaml
 dependencies:
   - name: argus
-    version: "0.1.0"
+    version: "0.1.1"
     repository: "oci://ghcr.io/lsflk/charts"
 ```
 
@@ -81,7 +81,8 @@ argus:
 ### Automated (CI/CD)
 
 The Helm chart automation follows a standard GitOps setup:
-- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`.
+- **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest`) on pushes to `main`. PRs that touch Go code or the Dockerfile build the image without pushing. After the first publish, set the GHCR package visibility to public under https://github.com/orgs/LSFLK/packages so clusters can pull without an imagePullSecret.
+- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. After the image push completes, publish the stable chart by dispatching this workflow with `version=0.1.1`.
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
 ### Manual Packaging and Push
@@ -96,7 +97,7 @@ helm package deployments/helm/argus -d .cr-release-packages/
 echo "$CR_PAT" | helm registry login ghcr.io -u <username> --password-stdin
 
 # 3. Push OCI artifact
-helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
+helm push .cr-release-packages/argus-0.1.1.tgz oci://ghcr.io/lsflk/charts
 ```
 
 ---
@@ -107,7 +108,8 @@ helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
 | --- | --- | --- |
 | `replicaCount` | Number of pod replicas | `2` |
 | `image.repository` | Container image repository | `ghcr.io/lsflk/argus` |
-| `image.tag` | Container image tag | `f21da85558410c19b6a96275b6e0eef2a788fb4b` |
+| `image.tag` | Container image tag (`:<git sha>` is also published) | `latest` |
+| `image.pullPolicy` | Image pull policy (`Always` when `tag` is `latest`) | `IfNotPresent` |
 | `service.type` | Kubernetes service type | `ClusterIP` |
 | `service.port` | Service port | `3001` |
 | `env.ENVIRONMENT` | Deployment environment | `production` |
@@ -117,5 +119,6 @@ helm push .cr-release-packages/argus-0.1.0.tgz oci://ghcr.io/lsflk/charts
 | `env.DB_NAME` | Database name | `audit_db` |
 | `env.REQUIRE_SIGNATURES` | Enable signature verification | `"true"` |
 | `env.S3_COMPLIANCE_BUCKET` | S3 WORM compliance bucket name | `"audit-compliance-logs-staging"` |
-| `auth.existingSecret` | Existing Kubernetes secret containing `DB_PASSWORD` | `""` |
+| `auth.existingSecret` | Existing Kubernetes secret containing `password` and `api-key` | `""` |
+| `auth.apiKey` | API key for authentication (`ARGUS_API_KEY`) | `""` |
 | `auth.externalSecrets.enabled` | Enable ExternalSecrets Operator (ESO) | `false` |
