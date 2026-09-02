@@ -1,7 +1,7 @@
 name: Helm Chart CI
 # Validates the Helm chart on PRs: lint + render. Never publishes — packaging and
-# pushing to GHCR is handled by build-dev-chart.yml (dev charts) and
-# build-image.yml (application image + stable chart).
+# pushing the chart to GHCR is handled by build-dev-chart.yml; the application
+# image is handled by build-image.yml.
 
 on:
   pull_request:

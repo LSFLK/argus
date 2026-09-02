@@ -49,10 +49,3 @@ Selector labels
 app.kubernetes.io/name: {{ include "argus.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
-
-{{/*
-Container image reference. Empty image.tag falls back to Chart.AppVersion.
-*/}}
-{{- define "argus.image" -}}
-{{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) }}
-{{- end }}

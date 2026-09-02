@@ -1,12 +1,8 @@
 .git
 .github
 .DS_Store
-**/.DS_Store
 deployments
 docs
 *.md
-CLAUDE.md
 Dockerfile.local
 docker-compose.yml
-coverage.out
-**/*_test.go

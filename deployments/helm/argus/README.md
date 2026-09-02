@@ -22,7 +22,7 @@ This chart provisions:
 
 ### 1. Install via OCI Artifact (Recommended)
 
-Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). Chart `0.1.1` defaults to the application image `ghcr.io/lsflk/argus:latest` (the same image is also tagged with the git SHA). Do not use chart `0.1.0` — it pointed at an unpublished `ghcr.io/opennsw/argus` image.
+Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). 
 
 ```bash
 # Install directly from OCI registry
@@ -81,8 +81,8 @@ argus:
 ### Automated (CI/CD)
 
 The Helm chart automation follows a standard GitOps setup:
-- **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest` on `main`). After a successful image push, also publishes the stable chart version from `Chart.yaml` (currently `0.1.1`) to `oci://ghcr.io/lsflk/charts`.
-- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`.
+- **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest`) on pushes to `main`.
+- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. Stable versions (e.g. `0.1.1`) are published by dispatching this workflow with an explicit version.
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
 ### Manual Packaging and Push
@@ -108,7 +108,7 @@ helm push .cr-release-packages/argus-0.1.1.tgz oci://ghcr.io/lsflk/charts
 | --- | --- | --- |
 | `replicaCount` | Number of pod replicas | `2` |
 | `image.repository` | Container image repository | `ghcr.io/lsflk/argus` |
-| `image.tag` | Container image tag (`:<git sha>` also published) | `latest` |
+| `image.tag` | Container image tag | `latest` |
 | `service.type` | Kubernetes service type | `ClusterIP` |
 | `service.port` | Service port | `3001` |
 | `env.ENVIRONMENT` | Deployment environment | `production` |
