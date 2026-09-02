@@ -4,6 +4,8 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/lsflk/argus
+  # :latest is mutable; the chart uses pullPolicy Always for this tag.
+  # Pin a git SHA (and IfNotPresent) in production.
   tag: latest
   pullPolicy: IfNotPresent
 

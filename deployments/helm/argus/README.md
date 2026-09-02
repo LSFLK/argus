@@ -81,8 +81,8 @@ argus:
 ### Automated (CI/CD)
 
 The Helm chart automation follows a standard GitOps setup:
-- **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest`) on pushes to `main`.
-- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. Stable versions (e.g. `0.1.1`) are published by dispatching this workflow with an explicit version.
+- **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest`) on pushes to `main`. PRs that touch Go code or the Dockerfile build the image without pushing. After the first publish, set the GHCR package visibility to public under https://github.com/orgs/LSFLK/packages so clusters can pull without an imagePullSecret.
+- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. After the image push completes, publish the stable chart by dispatching this workflow with `version=0.1.1`.
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
 ### Manual Packaging and Push
@@ -108,7 +108,8 @@ helm push .cr-release-packages/argus-0.1.1.tgz oci://ghcr.io/lsflk/charts
 | --- | --- | --- |
 | `replicaCount` | Number of pod replicas | `2` |
 | `image.repository` | Container image repository | `ghcr.io/lsflk/argus` |
-| `image.tag` | Container image tag | `latest` |
+| `image.tag` | Container image tag (`:<git sha>` is also published) | `latest` |
+| `image.pullPolicy` | Image pull policy (`Always` when `tag` is `latest`) | `IfNotPresent` |
 | `service.type` | Kubernetes service type | `ClusterIP` |
 | `service.port` | Service port | `3001` |
 | `env.ENVIRONMENT` | Deployment environment | `production` |

@@ -5,7 +5,8 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/lsflk/argus
-  tag: "1.0.0"
+  # Published tags are :latest and :<git sha>. 1.0.0 is not published.
+  tag: latest
   pullPolicy: IfNotPresent
 
 service:
