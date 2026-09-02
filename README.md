@@ -172,7 +172,7 @@ For full Helm configuration parameters, GitOps umbrella chart integration, and O
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ARGUS_API_KEY` | - | API key required for write operations (`X-API-Key` or `Authorization: Bearer <key>`). |
+| `ARGUS_API_KEY` | - | API key required for write operations (`X-API-Key`). |
 | `DB_TYPE` | `sqlite` | `sqlite` or `postgres`. |
 | `AUDIT_ENUMS_CONFIG` | `configs/enums.yaml` | Path to allowed event types/actions. |
 

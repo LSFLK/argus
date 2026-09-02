@@ -48,7 +48,7 @@ func TestAuthMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("accepts Authorization Bearer", func(t *testing.T) {
+	t.Run("rejects Authorization Bearer", func(t *testing.T) {
 		t.Setenv("ARGUS_API_KEY", "secret-key")
 		h := AuthMiddleware(ok)
 
@@ -56,7 +56,8 @@ func TestAuthMiddleware(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer secret-key")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Contains(t, w.Body.String(), "Missing API key")
 	})
 
 	t.Run("falls back to ARGUS_AUTH_TOKEN env", func(t *testing.T) {
@@ -100,13 +101,13 @@ func TestAuthMiddleware(t *testing.T) {
 		h := AuthMiddleware(ok)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/audit-logs", nil)
-		req.Header.Set("Authorization", "Bearer legacy-key")
+		req.Header.Set("X-API-Key", "legacy-key")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 		req = httptest.NewRequest(http.MethodPost, "/api/audit-logs", nil)
-		req.Header.Set("Authorization", "Bearer new-key")
+		req.Header.Set("X-API-Key", "new-key")
 		w = httptest.NewRecorder()
 		h.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code)

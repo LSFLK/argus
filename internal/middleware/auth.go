@@ -5,13 +5,11 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"os"
-	"strings"
 )
 
 // AuthMiddleware validates a static API key on write endpoints.
 // The key is read from ARGUS_API_KEY, with ARGUS_AUTH_TOKEN as a fallback
-// for older Helm/env deployments. Clients may send X-API-Key or
-// Authorization: Bearer <key>.
+// for older Helm/env deployments. Clients must send X-API-Key.
 func AuthMiddleware(next http.Handler) http.Handler {
 	apiKey := os.Getenv("ARGUS_API_KEY")
 	if apiKey == "" {
@@ -31,7 +29,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		presented := extractAPIKey(r)
+		presented := r.Header.Get("X-API-Key")
 		if presented == "" {
 			http.Error(w, "Unauthorized: Missing API key", http.StatusUnauthorized)
 			return
@@ -47,15 +45,4 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func extractAPIKey(r *http.Request) string {
-	if key := r.Header.Get("X-API-Key"); key != "" {
-		return key
-	}
-	parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-	if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-		return parts[1]
-	}
-	return ""
 }

@@ -9,12 +9,10 @@ Complete API reference for integrating Argus into your microservices architectur
 
 ## Authentication
 
-Write and read API endpoints require a static API key (`ARGUS_API_KEY`). Send it as `X-API-Key`, or as `Authorization: Bearer <key>` for compatibility. `/health`, `/metrics`, and `/version` are unauthenticated.
+Write and read API endpoints require a static API key (`ARGUS_API_KEY`) via the `X-API-Key` header. `/health`, `/metrics`, and `/version` are unauthenticated.
 
 ```bash
 curl -H "X-API-Key: <your-api-key>" ...
-# or
-curl -H "Authorization: Bearer <your-api-key>" ...
 ```
 
 ## Endpoints Overview
