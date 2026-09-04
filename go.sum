@@ -1,5 +1,5 @@
-github.com/LSFLK/argus/pkg/audit v0.0.0-20260429052721-d7d03100b319 h1:Z2+3T4pxTjOiXnZa7W/OsYLl6NaHetpUNv3VoCc3W20=
-github.com/LSFLK/argus/pkg/audit v0.0.0-20260429052721-d7d03100b319/go.mod h1:VPLkj7lPFOPSTNZulUsf+OCWcjz9vdndCRhcc2hfQjM=
+github.com/LSFLK/argus/pkg/audit v1.0.0 h1:iM0nC7k/l3adpg7ywKZ/ar4gphiPL2F5kA+au6WzMl4=
+github.com/LSFLK/argus/pkg/audit v1.0.0/go.mod h1:VPLkj7lPFOPSTNZulUsf+OCWcjz9vdndCRhcc2hfQjM=
 github.com/aws/aws-sdk-go-v2 v1.41.7 h1:DWpAJt66FmnnaRIOT/8ASTucrvuDPZASqhhLey6tLY8=
 github.com/aws/aws-sdk-go-v2 v1.41.7/go.mod h1:4LAfZOPHNVNQEckOACQx60Y8pSRjIkNZQz1w92xpMJc=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 h1:gx1AwW1Iyk9Z9dD9F4akX5gnN3QZwUB20GGKH/I+Rho=

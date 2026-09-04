@@ -46,7 +46,7 @@ sidecar). By default (no `DB_TYPE`/`DB_PATH` set) the service uses an in-memory 
 ### Two audiences, two packages
 
 - **`internal/`** — the Argus *service* itself (API, DB, pipeline). Not importable by other projects.
-- **`pkg/audit`** — the *client library* other Go services import (`go get github.com/LSFLK/argus/pkg/audit`)
+- **`pkg/audit`** — the *client library* other Go services import (`go get github.com/LSFLK/argus/pkg/audit@v1.0.0`). Always pin a tagged release; do not use commit pseudo-versions.
   to send audit events to a running Argus instance. This is a separate logical module from the service;
   don't leak service-internal types into it, and don't assume service-side dependencies (GORM, sinks) are
   available here. `pkg/audit/security.go` implements client-side request signing (RSA/Ed25519) that mirrors

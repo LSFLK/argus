@@ -30,8 +30,10 @@
 ## Quick Start: Using the Audit Interface
 
 ### Step 1: Add Argus to your project
+Pin a tagged client release. Do not depend on commit pseudo-versions.
+
 ```bash
-go get github.com/LSFLK/argus/pkg/audit
+go get github.com/LSFLK/argus/pkg/audit@v1.0.0
 ```
 
 ### Step 2: Initialize the hardened audit client
@@ -67,9 +69,9 @@ audit.LogAuditEvent(ctx, &audit.AuditLogRequest{
 Argus is designed to be the centralized audit source of truth for any microservice platform. By integrating the Argus client, your application gains high-performance, tamper-evident logging with zero impact on core performance.
 
 ### 1. Installation
-In your application:
+In your application, pin a tagged client release (not a commit pseudo-version):
 ```bash
-go get github.com/LSFLK/argus/pkg/audit
+go get github.com/LSFLK/argus/pkg/audit@v1.0.0
 ```
 
 ### 2. Global Initialization
