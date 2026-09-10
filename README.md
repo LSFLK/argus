@@ -31,7 +31,7 @@
 
 ### Step 1: Add Argus to your project
 ```bash
-go get github.com/LSFLK/argus/pkg/audit
+go get github.com/LSFLK/argus/pkg/audit@latest
 ```
 
 ### Step 2: Initialize the hardened audit client
@@ -69,7 +69,7 @@ Argus is designed to be the centralized audit source of truth for any microservi
 ### 1. Installation
 In your application:
 ```bash
-go get github.com/LSFLK/argus/pkg/audit
+go get github.com/LSFLK/argus/pkg/audit@latest
 ```
 
 ### 2. Global Initialization

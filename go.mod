@@ -3,7 +3,7 @@ module github.com/LSFLK/argus
 go 1.24.6
 
 require (
-	github.com/LSFLK/argus/pkg/audit v0.0.0-20260429052721-d7d03100b319
+	github.com/LSFLK/argus/pkg/audit v1.0.0
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
