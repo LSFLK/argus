@@ -181,7 +181,7 @@ For full Helm configuration parameters, GitOps umbrella chart integration, and O
 - [API Reference](docs/API.md)
 - [Architecture Deep Dive](docs/ARCHITECTURE.md)
 - [Database Setup](docs/DATABASE_CONFIGURATION.md)
-- [Release process](docs/RELEASE.md)
+- [Release process](docs/RELEASE.md) (includes a denylist of tags you must not reuse)
 
 ## License
 Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for more information.

@@ -122,5 +122,6 @@ The API is versioned by Go package path (`internal/api/v1/...`), not just by URL
 live alongside `v1` as a new package tree, mirroring the same handlers/services/models/database layers.
 
 Git tags, GitHub Releases, Helm chart versions, and the `pkg/audit` Go module are **separate** version
-lines and are immutable once published. See `docs/RELEASE.md`. Do not move, delete, or reuse published
-tags. Install docs use `@latest` and [Releases](https://github.com/LSFLK/argus/releases) so they do not need a rewrite every bump.
+lines and are immutable once published. See `docs/RELEASE.md` (taken-name denylist). Do not move,
+delete, or reuse those tags. Install docs use `@latest` and [Releases](https://github.com/LSFLK/argus/releases)
+so they do not need a rewrite every bump.

@@ -33,8 +33,8 @@ To stop the toolchain from *selecting* a bad module version, add `retract` and s
 ## Cutting a client release (`pkg/audit`)
 
 1. Land the change on `main`. Run `go test ./...`.
-2. Choose the next SemVer that does **not** already exist as `pkg/audit/vX.Y.Z`.
-3. Tag and push (no `--force`):
+2. Choose the next SemVer that does **not** already exist as `pkg/audit/vX.Y.Z` (`git tag -l 'pkg/audit/v*'` and the [Taken names](#taken-names--never-reuse) table).
+3. Tag and push (no `--force`). Append the new tag to [Taken names](#taken-names--never-reuse).
 
 ```bash
 git tag -a pkg/audit/vX.Y.Z -m "pkg/audit vX.Y.Z"
@@ -46,8 +46,8 @@ This repo may `replace github.com/LSFLK/argus/pkg/audit => ./pkg/audit` so servi
 
 ## Cutting a Helm chart release
 
-1. Bump `deployments/helm/argus/Chart.yaml` `version` to a number that is **not** already on [GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus). Never republish an existing chart version (including to “fix” `appVersion`).
-2. Merge to `main`, or dispatch [build-dev-chart.yml](../.github/workflows/build-dev-chart.yml) with that unpublished `version`.
+1. Bump `deployments/helm/argus/Chart.yaml` `version` to a number that is **not** already on [GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus) or in [Taken names](#taken-names--never-reuse). Never republish an existing chart version (including to “fix” `appVersion`).
+2. Merge to `main`, or dispatch [build-dev-chart.yml](../.github/workflows/build-dev-chart.yml) with that unpublished `version`. Append the new chart version to [Taken names](#taken-names--never-reuse).
 3. A path-only change under `deployments/helm/` on `main` publishes `0.0.0-dev.<run_number>`, not a stable chart. That is expected.
 
 ## What CI does
@@ -60,13 +60,26 @@ This repo may `replace github.com/LSFLK/argus/pkg/audit => ./pkg/audit` so servi
 
 There is no Go test workflow. No workflow runs on git tags or GitHub Releases.
 
-## Frozen history (do not rewrite)
+## Taken names — never reuse
 
-These names are already out. Leave them; do not retarget or delete.
+This is a **denylist**, not “what to install” (that is always [Releases](https://github.com/LSFLK/argus/releases) / `@latest`). Before tagging, run `git tag -l` and confirm the name is absent here **and** on origin. Append a row when you publish a new name. Never retarget, delete, or `gh release delete --cleanup-tag` a row that is already here.
 
-- Root tags `v0.1.0`, `v1.0.0`, `v1.0.1` — do not backfill GitHub Releases onto them. Root `v0.1.0` is not the Go client.
-- `pkg/audit/v1.0.0` — published client, **retracted**. Cached by the module proxy. GitHub Release is marked retracted.
-- `pkg/audit/v1.0.1` — retract-announcement tag only (itself retracted). Not a usable 1.x client.
+### Git tags
+
+| Tag | Notes |
+| --- | --- |
+| `v0.1.0` | Root module. Initial repo. Not the Go client. Do not backfill a GitHub Release onto this tag. |
+| `v1.0.0` | Root module. Do not move or delete. |
+| `v1.0.1` | Root module. Do not move or delete. |
+| `pkg/audit/v1.0.0` | Go client. **Retracted.** Cached by the module proxy and checksum DB. GitHub Release is marked retracted. |
+| `pkg/audit/v1.0.1` | Retract-announcement only (itself retracted). Not a usable 1.x client. |
+| `pkg/audit/v0.1.0` | Go client. GitHub Release title is `v0.1.0`; git tag is `pkg/audit/v0.1.0`. Distinct from root `v0.1.0`. |
+
+### Helm chart (GHCR)
+
+| Chart version | Notes |
+| --- | --- |
+| `0.1.1` | [`oci://ghcr.io/lsflk/charts/argus`](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus). Do not `helm push` this version again. |
 
 ```bash
 # Do not.
