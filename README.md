@@ -31,7 +31,7 @@
 
 ### Step 1: Add Argus to your project
 ```bash
-go get github.com/LSFLK/argus/pkg/audit@v0.1.0
+go get github.com/LSFLK/argus/pkg/audit@latest
 ```
 
 ### Step 2: Initialize the hardened audit client
@@ -69,7 +69,7 @@ Argus is designed to be the centralized audit source of truth for any microservi
 ### 1. Installation
 In your application:
 ```bash
-go get github.com/LSFLK/argus/pkg/audit@v0.1.0
+go get github.com/LSFLK/argus/pkg/audit@latest
 ```
 
 ### 2. Global Initialization
@@ -147,12 +147,11 @@ Argus exports standard Prometheus metrics at `/metrics`:
 
 ## Deployment & Helm Chart
 
-Argus provides an official Helm chart published as an **OCI Artifact** to GitHub Container Registry (`ghcr.io/lsflk/charts/argus`), as well as local chart source at [`deployments/helm/argus`](deployments/helm/argus). The application container image is published to `ghcr.io/lsflk/argus` (`:latest` and `:<git sha>`). Chart version `0.1.1` is the Helm package ([GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus)); it is not the Go client (`pkg/audit@v0.1.0`).
+Argus provides an official Helm chart published as an **OCI Artifact** to GitHub Container Registry (`ghcr.io/lsflk/charts/argus`), as well as local chart source at [`deployments/helm/argus`](deployments/helm/argus). The application container image is published to `ghcr.io/lsflk/argus` (`:latest` and `:<git sha>`). Chart versions and the Go client (`pkg/audit`) are versioned independently; omit `--version` to install the latest chart from [GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus).
 
 ### Install via OCI Artifact (Recommended)
 ```bash
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
-  --version 0.1.1 \
   -n <your-namespace> \
   --create-namespace \
   -f custom-values.yaml
@@ -180,7 +179,7 @@ For full Helm configuration parameters, GitOps umbrella chart integration, and O
 - [API Reference](docs/API.md)
 - [Architecture Deep Dive](docs/ARCHITECTURE.md)
 - [Database Setup](docs/DATABASE_CONFIGURATION.md)
-- [Release process](docs/RELEASE.md) (published tags are listed there — do not reuse them)
+- [Release process](docs/RELEASE.md)
 
 ## License
 Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for more information.

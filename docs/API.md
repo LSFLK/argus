@@ -192,7 +192,7 @@ curl http://localhost:3001/version
 ```json
 {
   "service": "argus",
-  "version": "0.1.0",
+  "version": "dev",
   "buildTime": "2024-01-20T10:00:00Z",
   "gitCommit": "abc123def456"
 }
