@@ -2,6 +2,13 @@
 
 Published versions are **immutable**. Do not delete, move, retarget, or reuse a tag, GitHub Release, Helm chart version, or container digest that has already been pushed. Go’s module proxy (`proxy.golang.org`) and checksum database (`sum.golang.org`) keep module versions even if the GitHub tag is later removed.
 
+**`0.1.1` is the Helm chart, not the Go client.** They are not typos for each other:
+
+| Artifact | Current version | Where |
+| --- | --- | --- |
+| Go client (`pkg/audit`) | `v0.1.0` | [GitHub Release](https://github.com/LSFLK/argus/releases/tag/pkg/audit/v0.1.0) (`go get …@v0.1.0`) |
+| Helm chart | `0.1.1` | [GHCR `charts/argus`](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus) (`helm … --version 0.1.1`) |
+
 Argus has **four independent version lines**. A number used in one line does not free it in another.
 
 | Line | Identity | How it is published |
@@ -24,7 +31,7 @@ These names are taken. Never create a new release, tag, or chart that recycles t
 | `v1.0.1` | Client utilities (`2512797`) | Root-module tag. Do not move or delete. |
 | `pkg/audit/v1.0.0` | `85d5ea5` | **Retracted** Go client. Cached by the module proxy and checksum DB. Do not move, delete, or `gh release delete --cleanup-tag`. |
 | `pkg/audit/v1.0.1` | retract commit | Retract-announcement only (itself retracted). Not a usable 1.x client. |
-| `pkg/audit/v0.1.0` | retract commit | **Current Go client.** Pin this. Next client tag is `pkg/audit/v0.1.1` or `pkg/audit/v0.2.0`. |
+| `pkg/audit/v0.1.0` | retract commit | **Current Go client.** Pin this. A later client patch would be `pkg/audit/v0.1.1` (unrelated to Helm chart `0.1.1`). |
 
 Root `v0.1.0` and client `pkg/audit/v0.1.0` are different tags. Do not retarget the root tag to “match” the client.
 
@@ -41,7 +48,7 @@ Do not backfill GitHub Releases onto root tags `v0.1.0` / `v1.0.0` / `v1.0.1`.
 
 | Chart version | Registry | Status |
 | --- | --- | --- |
-| `0.1.1` | `oci://ghcr.io/lsflk/charts/argus` | Published. Do not `helm push` this version again. Next chart is `0.1.2` or higher. |
+| `0.1.1` | [`oci://ghcr.io/lsflk/charts/argus`](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus) | **Current Helm chart.** Published. Do not `helm push` this version again. Next chart is `0.1.2` or higher. |
 
 `Chart.yaml` `appVersion` is metadata only and must not be “fixed” by republishing `0.1.1`.
 
@@ -58,11 +65,11 @@ The **product and client** stay on **0.x** until the team agrees a stable 1.0. B
 ## Cutting a client release (`pkg/audit`)
 
 1. Land the change on `main`. Do not retarget an old tag.
-2. Tag `pkg/audit/vX.Y.Z` on that commit. Never reuse a tag from the table above. Next after `v0.1.0` is `v0.1.1` (patch) or `v0.2.0` (break).
+2. Tag `pkg/audit/vX.Y.Z` on that commit. Never reuse a tag from the table above.
 3. Push the new tag (`git push origin <tag>`). Do not `--force` tags.
 4. `gh release create 'pkg/audit/vX.Y.Z' --title 'vX.Y.Z' --notes '...'`
 
-Annotated tags, nested-module name:
+Annotated tags, nested-module name (example of a later client patch — not the Helm chart):
 
 ```bash
 git tag -a pkg/audit/v0.1.1 -m "pkg/audit v0.1.1"
