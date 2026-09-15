@@ -22,7 +22,7 @@ This chart provisions:
 
 ### 1. Install via OCI Artifact (Recommended)
 
-Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). 
+Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). Check [Releases](https://github.com/LSFLK/argus/releases) for current tags.
 
 ```bash
 # Install the latest published chart (omit --version). Pin --version only when you need a specific chart.
@@ -32,7 +32,7 @@ helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
   --values ./custom-values.yaml
 ```
 
-To pull the packaged chart locally (replace with a version from [GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus) if you need a pin):
+To pull the packaged chart locally (pin `--version` from [Releases](https://github.com/LSFLK/argus/releases) if you need a specific chart):
 
 ```bash
 helm pull oci://ghcr.io/lsflk/charts/argus
@@ -56,7 +56,7 @@ When referencing Argus as a dependency in your umbrella chart (`Chart.yaml`):
 ```yaml
 dependencies:
   - name: argus
-    version: "x.y.z" # latest published chart: https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus
+    version: "x.y.z" # https://github.com/LSFLK/argus/releases
     repository: "oci://ghcr.io/lsflk/charts"
 ```
 

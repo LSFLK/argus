@@ -46,7 +46,7 @@ sidecar). By default (no `DB_TYPE`/`DB_PATH` set) the service uses an in-memory 
 ### Two audiences, two packages
 
 - **`internal/`** — the Argus *service* itself (API, DB, pipeline). Not importable by other projects.
-- **`pkg/audit`** — the *client library* other Go services import (`go get github.com/LSFLK/argus/pkg/audit@latest`). Pin the resolved tag in `go.mod`; do not use retracted 1.x versions or commit pseudo-versions.
+- **`pkg/audit`** — the *client library* other Go services import (`go get github.com/LSFLK/argus/pkg/audit@latest`). See [Releases](https://github.com/LSFLK/argus/releases) for tags. Pin the resolved tag in `go.mod`; do not use retracted 1.x versions or commit pseudo-versions.
   to send audit events to a running Argus instance. This is a separate logical module from the service;
   don't leak service-internal types into it, and don't assume service-side dependencies (GORM, sinks) are
   available here. `pkg/audit/security.go` implements client-side request signing (RSA/Ed25519) that mirrors
@@ -123,4 +123,4 @@ live alongside `v1` as a new package tree, mirroring the same handlers/services/
 
 Git tags, GitHub Releases, Helm chart versions, and the `pkg/audit` Go module are **separate** version
 lines and are immutable once published. See `docs/RELEASE.md`. Do not move, delete, or reuse published
-tags. Install docs use `@latest` / the latest chart on GHCR so they do not need a rewrite every bump.
+tags. Install docs use `@latest` and [Releases](https://github.com/LSFLK/argus/releases) so they do not need a rewrite every bump.

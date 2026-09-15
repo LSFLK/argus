@@ -2,14 +2,7 @@
 
 Published versions are **immutable**. Do not delete, move, retarget, force-push, or reuse a git tag, GitHub Release, Helm chart version, or container digest that has already been pushed. Go’s module proxy (`proxy.golang.org`) and checksum database (`sum.golang.org`) keep module versions even if the GitHub tag is later removed.
 
-Look up what already exists instead of copying numbers out of this file:
-
-| Line | How to see published names |
-| --- | --- |
-| Git tags | `git tag -l` / `git ls-remote --tags origin` |
-| GitHub Releases | https://github.com/LSFLK/argus/releases |
-| Helm chart | https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus |
-| App image | `ghcr.io/lsflk/argus` (`:latest` and `:<git sha>` only) |
+Look up what already exists at [github.com/LSFLK/argus/releases](https://github.com/LSFLK/argus/releases) instead of copying numbers out of this file. Git tags (`git tag -l`), the [Helm package on GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus), and `ghcr.io/lsflk/argus` (`:latest` / `:<git sha>`) are the other sources of truth.
 
 ## Four independent version lines
 
@@ -22,7 +15,7 @@ A number used in one line does not occupy that number in another. Client `v0.1.0
 | Helm chart | `oci://ghcr.io/lsflk/charts/argus` | `version` in `deployments/helm/argus/Chart.yaml`. OCI versions cannot be overwritten. |
 | App image | `ghcr.io/lsflk/argus` | `:latest` (mutable) and `:<git sha>`. Do not invent semver image tags. |
 
-Install docs should track **latest**, not a snapshot of today’s numbers:
+Install docs should track **latest**, not a snapshot of today’s numbers. See [Releases](https://github.com/LSFLK/argus/releases) for current tags.
 
 ```bash
 go get github.com/LSFLK/argus/pkg/audit@latest
