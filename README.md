@@ -31,7 +31,7 @@
 
 ### Step 1: Add Argus to your project
 ```bash
-go get github.com/LSFLK/argus/pkg/audit@latest
+go get github.com/LSFLK/argus/pkg/audit@v0.1.0
 ```
 
 ### Step 2: Initialize the hardened audit client
@@ -69,7 +69,7 @@ Argus is designed to be the centralized audit source of truth for any microservi
 ### 1. Installation
 In your application:
 ```bash
-go get github.com/LSFLK/argus/pkg/audit@latest
+go get github.com/LSFLK/argus/pkg/audit@v0.1.0
 ```
 
 ### 2. Global Initialization
@@ -180,6 +180,7 @@ For full Helm configuration parameters, GitOps umbrella chart integration, and O
 - [API Reference](docs/API.md)
 - [Architecture Deep Dive](docs/ARCHITECTURE.md)
 - [Database Setup](docs/DATABASE_CONFIGURATION.md)
+- [Release process](docs/RELEASE.md) (published tags are listed there — do not reuse them)
 
 ## License
 Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for more information.

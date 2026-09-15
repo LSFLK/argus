@@ -82,7 +82,7 @@ argus:
 
 The Helm chart automation follows a standard GitOps setup:
 - **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest`) on pushes to `main`. PRs that touch Go code or the Dockerfile build the image without pushing. After the first publish, set the GHCR package visibility to public under https://github.com/orgs/LSFLK/packages so clusters can pull without an imagePullSecret.
-- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. After the image push completes, publish the stable chart by dispatching this workflow with `version=0.1.1`.
+- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. After the image push completes, publish a **new** stable chart version by dispatching this workflow with an unpublished `version` (never reuse `0.1.1`). See [docs/RELEASE.md](../../../docs/RELEASE.md).
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
 ### Manual Packaging and Push

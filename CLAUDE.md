@@ -46,7 +46,7 @@ sidecar). By default (no `DB_TYPE`/`DB_PATH` set) the service uses an in-memory 
 ### Two audiences, two packages
 
 - **`internal/`** — the Argus *service* itself (API, DB, pipeline). Not importable by other projects.
-- **`pkg/audit`** — the *client library* other Go services import (`go get github.com/LSFLK/argus/pkg/audit@latest`). Always pin a tagged release; do not use commit pseudo-versions.
+- **`pkg/audit`** — the *client library* other Go services import (`go get github.com/LSFLK/argus/pkg/audit@v0.1.0`). Always pin a tagged 0.x release; do not use v1.0.0 (retracted) or commit pseudo-versions.
   to send audit events to a running Argus instance. This is a separate logical module from the service;
   don't leak service-internal types into it, and don't assume service-side dependencies (GORM, sinks) are
   available here. `pkg/audit/security.go` implements client-side request signing (RSA/Ed25519) that mirrors
@@ -120,3 +120,7 @@ then pushed into `internal/api/v1/models` via `SetEnumConfig` for O(1) validatio
 
 The API is versioned by Go package path (`internal/api/v1/...`), not just by URL prefix — a `v2` would
 live alongside `v1` as a new package tree, mirroring the same handlers/services/models/database layers.
+
+Git tags, GitHub Releases, Helm chart versions, and the `pkg/audit` Go module are **separate** version
+lines and are immutable once published. See `docs/RELEASE.md` for the inventory of already-used names
+and the process for cutting a new client/chart release. Do not move, delete, or reuse those tags.
