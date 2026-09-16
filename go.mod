@@ -56,5 +56,3 @@ require (
 	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
-
-replace github.com/LSFLK/argus/pkg/audit => ./pkg/audit

@@ -42,7 +42,7 @@ git push origin pkg/audit/vX.Y.Z
 gh release create "pkg/audit/vX.Y.Z" --title "vX.Y.Z" --notes "..."
 ```
 
-This repo may `replace github.com/LSFLK/argus/pkg/audit => ./pkg/audit` so service builds do not wait on the proxy. Tags do not trigger image or chart workflows.
+Tags do not trigger image or chart workflows.
 
 ## Cutting a Helm chart release
 
