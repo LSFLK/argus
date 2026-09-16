@@ -22,21 +22,20 @@ This chart provisions:
 
 ### 1. Install via OCI Artifact (Recommended)
 
-Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). 
+Argus Helm charts are published as OCI artifacts to the GitHub Container Registry (`ghcr.io`). Check [Releases](https://github.com/LSFLK/argus/releases) for current tags.
 
 ```bash
-# Install directly from OCI registry
+# Install the latest published chart (omit --version). Pin --version only when you need a specific chart.
 helm upgrade --install argus oci://ghcr.io/lsflk/charts/argus \
-  --version 0.1.1 \
   --namespace <your-namespace> \
   --create-namespace \
   --values ./custom-values.yaml
 ```
 
-To pull the packaged chart locally:
+To pull the packaged chart locally (pin `--version` from [Releases](https://github.com/LSFLK/argus/releases) if you need a specific chart):
 
 ```bash
-helm pull oci://ghcr.io/lsflk/charts/argus --version 0.1.1
+helm pull oci://ghcr.io/lsflk/charts/argus
 ```
 
 ### 2. Standalone Deployment from Source
@@ -57,7 +56,7 @@ When referencing Argus as a dependency in your umbrella chart (`Chart.yaml`):
 ```yaml
 dependencies:
   - name: argus
-    version: "0.1.1"
+    version: "x.y.z" # https://github.com/LSFLK/argus/releases
     repository: "oci://ghcr.io/lsflk/charts"
 ```
 
@@ -82,7 +81,7 @@ argus:
 
 The Helm chart automation follows a standard GitOps setup:
 - **Application image (`.github/workflows/build-image.yml`)**: Builds and pushes `ghcr.io/lsflk/argus` (`:<git sha>` and `:latest`) on pushes to `main`. PRs that touch Go code or the Dockerfile build the image without pushing. After the first publish, set the GHCR package visibility to public under https://github.com/orgs/LSFLK/packages so clusters can pull without an imagePullSecret.
-- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. After the image push completes, publish the stable chart by dispatching this workflow with `version=0.1.1`.
+- **Dev Chart (`.github/workflows/build-dev-chart.yml`)**: On pushes to `main` with chart changes (or manual dispatch), packages and publishes a dev chart (`0.0.0-dev.<run_number>`) to `oci://ghcr.io/lsflk/charts`. After the image push completes, publish a **new** stable chart by dispatching this workflow with a `version` that is not already on [GHCR](https://github.com/LSFLK/argus/pkgs/container/charts%2Fargus) or in the [taken-names denylist](../../../docs/RELEASE.md#taken-names--never-reuse).
 - **Chart CI (`.github/workflows/helm-ci.yml`)**: Lints the chart and verifies template rendering on pull requests.
 
 ### Manual Packaging and Push
@@ -97,7 +96,7 @@ helm package deployments/helm/argus -d .cr-release-packages/
 echo "$CR_PAT" | helm registry login ghcr.io -u <username> --password-stdin
 
 # 3. Push OCI artifact
-helm push .cr-release-packages/argus-0.1.1.tgz oci://ghcr.io/lsflk/charts
+helm push .cr-release-packages/argus-*.tgz oci://ghcr.io/lsflk/charts
 ```
 
 ---
