@@ -41,9 +41,11 @@ func (m *AuditMiddleware) Client() Auditor {
 }
 
 // LogAuditEvent sends an audit event to the audit service API
-// This function is used to log audit events using the unified audit log structure
+// This function is used to log audit events using the unified audit log structure.
+// Skips when the client is nil or IsEnabled() returns false so custom Auditor
+// implementations that do not no-op themselves are not invoked when disabled.
 func (m *AuditMiddleware) LogAuditEvent(ctx context.Context, auditRequest *AuditLogRequest) {
-	if m.client == nil {
+	if m.client == nil || !m.client.IsEnabled() {
 		return
 	}
 	m.client.LogEvent(ctx, auditRequest)
